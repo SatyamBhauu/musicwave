@@ -1,4 +1,3 @@
-<script>
         const state = {
             currentSong: null,
             isPlaying: false,
