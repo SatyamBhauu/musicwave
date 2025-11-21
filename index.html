@@ -1,0 +1,1365 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+// Firebase imports (must be explicitly imported for a single-file React environment)
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  signInAnonymously, 
+  signInWithCustomToken, 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut
+} from 'firebase/auth';
+import { getFirestore, doc, setDoc, collection, query, onSnapshot, getDocs } from 'firebase/firestore';
+
+// --- Utility Functions for Firebase Initialization ---
+
+// Global variables provided by the canvas environment
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : undefined;
+
+// Mock Audio Data
+const mockSongs = [
+  { id: '1', title: 'Cosmic Drift', artist: 'Stellar Waves', duration: '3:45', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', cover: 'https://placehold.co/100x100/4F46E5/ffffff?text=CD' },
+  { id: '2', title: 'Urban Echoes', artist: 'City Beat', duration: '2:59', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', cover: 'https://placehold.co/100x100/10B981/ffffff?text=UE' },
+  { id: '3', title: 'Forest Retreat', artist: 'Ambient Flow', duration: '4:12', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', cover: 'https://placehold.co/100x100/F97316/ffffff?text=FR' },
+  { id: '4', title: 'Neon Pulse', artist: 'City Beat', duration: '3:20', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', cover: 'https://placehold.co/100x100/9333EA/ffffff?text=NP' },
+  { id: '5', title: 'Deep Space', artist: 'Stellar Waves', duration: '5:01', audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3', cover: 'https://placehold.co/100x100/CA8A04/ffffff?text=DS' },
+];
+
+// --- Search Bar Component ---
+const SearchBar = ({ searchText, setSearchText, searchInputRef }) => (
+  <div className="relative w-full max-w-lg mx-4 hidden md:block">
+    <input
+      ref={searchInputRef}
+      type="text"
+      placeholder="Search for songs or artists..."
+      value={searchText}
+      onChange={(e) => setSearchText(e.target.value)}
+      className="w-full p-3 pl-10 bg-gray-700 text-white rounded-full focus:ring-2 focus:ring-green-500 focus:outline-none placeholder-gray-400 transition"
+    />
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" 
+      fill="none" 
+      viewBox="0 0 24 24" 
+      stroke="currentColor"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  </div>
+);
+
+
+// --- Authentication Modal Component ---
+const AuthModal = ({ auth, showAuthModal, setShowAuthModal }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    setError('');
+  }, [isLogin, showAuthModal]);
+
+  const handleAuth = async () => {
+    setError('');
+    setIsLoading(true);
+
+    if (!email || !password) {
+      setError('Please fill in both fields.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await createUserWithEmailAndPassword(auth, email, password);
+      }
+      setShowAuthModal(false);
+    } catch (e) {
+      console.error("Auth Error:", e);
+      if (e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
+        setError('Invalid email or password.');
+      } else if (e.code === 'auth/email-already-in-use') {
+        setError('This email is already in use. Try logging in.');
+      } else if (e.code === 'auth/weak-password') {
+        setError('Password should be at least 6 characters.');
+      } else {
+        setError('Authentication failed. Please check your credentials.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (!showAuthModal) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+      <div className="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm">
+        
+        <div className="flex justify-between items-start mb-6">
+          <h2 className="text-3xl font-bold text-white">
+            {isLogin ? 'Log In' : 'Sign Up'}
+          </h2>
+          <button onClick={() => setShowAuthModal(false)} className="text-gray-400 hover:text-white transition">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex mb-4">
+          <button
+            onClick={() => setIsLogin(true)}
+            className={`flex-1 py-2 text-center rounded-l-lg transition font-semibold ${
+              isLogin ? 'bg-green-500 text-black' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+          >
+            Log In
+          </button>
+          <button
+            onClick={() => setIsLogin(false)}
+            className={`flex-1 py-2 text-center rounded-r-lg transition font-semibold ${
+              !isLogin ? 'bg-green-500 text-black' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+            }`}
+          >
+            Sign Up
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-900/50 text-red-300 p-3 rounded-lg mb-4 text-sm border border-red-700">
+            {error}
+          </div>
+        )}
+
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-3 mb-4 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full p-3 mb-6 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+        />
+
+        <button
+          onClick={handleAuth}
+          disabled={isLoading}
+          className={`w-full py-3 rounded-full font-bold transition duration-300 ${
+            isLoading ? 'bg-green-700 text-gray-300 cursor-not-allowed' : 'bg-green-500 text-black hover:bg-green-400 hover:scale-[1.02]'
+          }`}
+        >
+          {isLoading ? (
+            <svg className="animate-spin h-5 w-5 mx-auto text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          ) : isLogin ? 'Log In' : 'Sign Up'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+// --- Profile Dropdown Menu Component (UPDATED) ---
+const ProfileDropdown = ({ userId, handleLogout, closeDropdown, navigateTo }) => {
+    const [statusMessage, setStatusMessage] = useState('');
+
+    const handleAction = (action) => {
+        closeDropdown(); // Close the menu on any action
+
+        if (action === 'Log out') {
+            handleLogout();
+        } else if (action === 'Account') {
+            navigateTo('account'); 
+        } else if (action === 'Settings') {
+            navigateTo('settings'); // NEW: Navigate to the settings view
+        } else if (action === 'Support' || action === 'Upgrade to Premium') {
+            // Simulated external links
+            console.log(`Simulating external navigation for ${action}`);
+            setStatusMessage(`${action} link clicked! (Check console)`);
+        } else {
+            // Default internal navigation simulation
+            setStatusMessage(`Navigating to ${action}...`);
+        }
+    };
+
+    // Array defining the menu structure
+    const menuItems = [
+        { name: 'Experimental features', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7v10l10 5 10-5V7L12 2z"></path><polyline points="2 7 12 12 22 7"></polyline><polyline points="2 17 12 22 22 17"></polyline><polyline points="12 2V22"></polyline></svg>, external: false },
+        { name: 'Account', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="7" r="4"></circle><path d="M12 20v-2m-3-1a7 7 0 016 0"></path><path d="M17 12a5 5 0 00-10 0"></path></svg>, external: false }, 
+        { name: 'Profile', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>, external: false },
+        { name: 'Upgrade to Premium', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 00-8.98 14.77l1.73-1.73A8 8 0 1112 20V12"></path><path d="M12 12l-4 4m8 0l-4-4"></path></svg>, external: true },
+        { name: 'Support', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>, external: true },
+        { name: 'Private session', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 10h-1v-4a5 5 0 00-5-5 5 5 0 00-5 5v4h-1a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2z"></path></svg>, external: false },
+        { name: 'Settings', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009.2 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9.2a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H11V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001.82.33 1.65 1.65 0 001-.51l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82 1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.82.33z"></path></svg>, external: false },
+        { name: 'Log out', icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>, external: false, isLogout: true },
+    ];
+
+    return (
+        <div className="absolute top-12 right-0 w-60 bg-gray-800 rounded-lg shadow-2xl overflow-hidden z-30 transform translate-x-4 md:translate-x-0">
+            {/* Status Message Display */}
+            {statusMessage && (
+                <div className="p-2 text-sm text-green-400 bg-gray-700/50 truncate">
+                    {statusMessage}
+                </div>
+            )}
+            
+            <ul className="py-1">
+                {menuItems.map(item => (
+                    <li key={item.name} className="relative">
+                        <button
+                            onClick={() => handleAction(item.name)}
+                            className={`w-full text-left px-4 py-2 text-sm text-white flex items-center transition duration-150 
+                                ${item.isLogout ? 'text-red-400 hover:bg-red-900/50' : 'hover:bg-gray-700'}
+                            `}
+                        >
+                            <span className="mr-3 text-gray-400">{item.icon}</span>
+                            <span>{item.name}</span>
+                            {item.external && (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-auto text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            )}
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+};
+
+// --- New Component: Edit Personal Info Page ---
+const EditPersonalInfoPage = ({ navigateTo, userId }) => {
+  // Mock State for Form Data, using userId for a mock username
+  const [formData, setFormData] = useState({
+    username: userId ? 'user_' + userId.substring(0, 16) : 'guest_user_12345678',
+    email: 'user_email@example.com',
+    password: '', 
+    gender: 'Male',
+    birthYear: '2008',
+    birthMonth: 'September',
+    birthDay: '6',
+    country: 'India',
+    shareData: true,
+  });
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value,
+    }));
+  };
+
+  const handleSave = () => {
+    console.log("Saving profile info:", formData);
+    // Navigating back to the account page after a simulated save.
+    navigateTo('account'); 
+  };
+
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 100 }, (_, i) => currentYear - i).map(String);
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const countries = ['United States', 'India', 'United Kingdom', 'Canada', 'Germany', 'Brazil', 'Japan'];
+  const days = Array.from({ length: 31 }, (_, i) => String(i + 1));
+
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8 max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center space-x-4">
+        {/* Back button to return to account settings */}
+        <button 
+          onClick={() => navigateTo('account')} 
+          className="text-gray-400 hover:text-white transition duration-200 p-2 rounded-full hover:bg-gray-800"
+          aria-label="Go back to account settings"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+        </button>
+        <h2 className="text-4xl font-bold text-white">Edit personal info</h2>
+      </div>
+
+      <div className="space-y-6">
+        {/* Username (Display Only) */}
+        <div className="space-y-2">
+          <label className="text-lg font-semibold text-gray-300 block">Username</label>
+          <p className="text-white p-3 bg-gray-700 rounded-lg">{formData.username}</p>
+        </div>
+        
+        {/* Email Input */}
+        <div className="space-y-2">
+          <label htmlFor="email" className="text-lg font-semibold text-gray-300 block">Email</label>
+          <input
+            id="email"
+            type="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            className="w-full p-3 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+          />
+        </div>
+        
+        {/* Password Input (Hidden) */}
+        <div className="space-y-2">
+          <label htmlFor="password" className="text-lg font-semibold text-gray-300 block">Password</label>
+          <input
+            id="password"
+            type="password"
+            name="password"
+            placeholder="****************"
+            value={formData.password}
+            onChange={handleChange}
+            className="w-full p-3 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+          />
+        </div>
+        
+        {/* Gender Select */}
+        <div className="space-y-2">
+          <label htmlFor="gender" className="text-lg font-semibold text-gray-300 block">Gender</label>
+          <div className="relative">
+            <select
+              id="gender"
+              name="gender"
+              value={formData.gender}
+              onChange={handleChange}
+              className="w-full p-3 bg-gray-700 text-white rounded-lg appearance-none focus:ring-2 focus:ring-green-500 focus:outline-none pr-10"
+            >
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Non-binary">Non-binary</option>
+              <option value="Prefer not to say">Prefer not to say</option>
+            </select>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Date of Birth Inputs */}
+        <div className="space-y-2">
+          <label className="text-lg font-semibold text-gray-300 block">Date of birth</label>
+          <div className="grid grid-cols-3 gap-4">
+            
+            {/* Year Input */}
+            <input
+              type="text"
+              name="birthYear"
+              value={formData.birthYear}
+              onChange={handleChange}
+              placeholder="Year"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+              list="year-options"
+            />
+            <datalist id="year-options">
+              {years.map(y => <option key={y} value={y} />)}
+            </datalist>
+            
+            {/* Month Select */}
+            <div className="relative">
+              <select
+                name="birthMonth"
+                value={formData.birthMonth}
+                onChange={handleChange}
+                className="w-full p-3 bg-gray-700 text-white rounded-lg appearance-none focus:ring-2 focus:ring-green-500 focus:outline-none pr-8"
+              >
+                {months.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+            </div>
+            
+            {/* Day Input */}
+            <input
+              type="text"
+              name="birthDay"
+              value={formData.birthDay}
+              onChange={handleChange}
+              placeholder="Day"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none"
+              list="day-options"
+            />
+            <datalist id="day-options">
+              {days.map(d => <option key={d} value={d} />)}
+            </datalist>
+          </div>
+        </div>
+
+        {/* Country or region Select */}
+        <div className="space-y-2">
+          <label htmlFor="country" className="text-lg font-semibold text-gray-300 block">Country or region</label>
+          <div className="relative">
+            <select
+              id="country"
+              name="country"
+              value={formData.country}
+              onChange={handleChange}
+              className="w-full p-3 bg-gray-700 text-white rounded-lg appearance-none focus:ring-2 focus:ring-green-500 focus:outline-none pr-10"
+            >
+              {countries.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Checkbox */}
+        <div className="flex items-center space-x-3 pt-4">
+          <input
+            id="shareData"
+            type="checkbox"
+            name="shareData"
+            checked={formData.shareData}
+            onChange={handleChange}
+            className="h-5 w-5 text-green-500 bg-gray-700 border-gray-600 rounded focus:ring-green-500 cursor-pointer"
+          />
+          <label htmlFor="shareData" className="text-gray-300 text-base cursor-pointer">
+            Share my registration data with Spotify's content providers for marketing purposes.
+          </label>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex justify-end space-x-4 pt-8">
+          <button
+            onClick={() => navigateTo('account')}
+            className="text-gray-400 font-semibold py-3 px-8 rounded-full hover:text-white transition duration-200"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="bg-green-500 text-black font-bold py-3 px-8 rounded-full hover:bg-green-400 transition duration-200 shadow-lg"
+          >
+            Save profile
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+// --- New Component: Account Option Helper ---
+const AccountOption = ({ title, icon, onClick }) => (
+    <button 
+      onClick={onClick}
+      className="w-full flex items-center justify-between p-4 hover:bg-gray-700/50 rounded-lg transition duration-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+    >
+        <div className="flex items-center space-x-4">
+            <span className="text-gray-400">{icon}</span>
+            <span className="text-white text-lg font-medium">{title}</span>
+        </div>
+        {/* Right Arrow Icon */}
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+    </button>
+);
+
+
+// --- New Component: Account Settings Page ---
+const AccountSettingsPage = ({ navigateTo }) => (
+  <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+    {/* Header with back button */}
+    <div className="flex items-center space-x-4 mb-8">
+      <button 
+        onClick={() => navigateTo('home')} 
+        className="text-gray-400 hover:text-white transition duration-200 p-2 rounded-full hover:bg-gray-800"
+        aria-label="Go back to music player"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+      </button>
+      <h2 className="text-4xl font-bold text-white">Account</h2>
+    </div>
+
+    {/* Account Options Block */}
+    <div className="bg-gray-800 rounded-xl shadow-xl overflow-hidden divide-y divide-gray-700">
+      <AccountOption 
+        title="Edit personal info" 
+        onClick={() => navigateTo('edit-info')} 
+        icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        } 
+      />
+      <AccountOption 
+        title="Recover playlists" 
+        onClick={() => console.log('Recover playlists clicked')}
+        icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.5 12a8.5 8.5 0 0113.84-6.49M20.5 12a8.5 8.5 0 01-13.84 6.49"></path></svg>
+        } 
+      />
+      <AccountOption 
+        title="Address" 
+        onClick={() => console.log('Address clicked')}
+        icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        } 
+      />
+    </div>
+
+    <div className="text-gray-400 text-sm mt-8 p-4">
+        Note: Clicking any of the options above will only log an action to the console in this demo application, except for 'Edit personal info' which opens the form.
+    </div>
+  </div>
+);
+
+// --- Helper Component: Settings Toggle ---
+const SettingsToggle = ({ title, description, isToggled, onToggle }) => (
+    <div className="flex items-center justify-between py-4 border-b border-gray-800">
+        <div className="flex-1 pr-4">
+            <h3 className="text-xl font-semibold text-white mb-1">{title}</h3>
+            {description && (
+                <p className="text-gray-400 text-sm">
+                    {description}
+                    {/* Explicit content specific note */}
+                    {title === 'Explicit content' && (
+                        <span className="block mt-2 text-xs text-yellow-400">
+                            ⓘ It may take some time for your experience to update.
+                        </span>
+                    )}
+                </p>
+            )}
+        </div>
+        <button
+            onClick={onToggle}
+            className={`relative inline-flex flex-shrink-0 h-6 w-11 border-2 border-transparent rounded-full cursor-pointer transition-colors ease-in-out duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 ${
+                isToggled ? 'bg-green-500' : 'bg-gray-600'
+            }`}
+            role="switch"
+            aria-checked={isToggled}
+        >
+            <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform ring-0 transition ease-in-out duration-200 ${
+                    isToggled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+            ></span>
+        </button>
+    </div>
+);
+
+// --- Helper Component: Settings Select ---
+const SettingsSelect = ({ title, description, value, options, onChange, infoIcon = false }) => (
+    <div className="flex justify-between items-start py-4 border-b border-gray-800">
+        <div className="flex-1 pr-4">
+            <h3 className="text-xl font-semibold text-white mb-1">{title}</h3>
+            {description && (
+                <p className="text-gray-400 text-sm flex items-center">
+                    {description}
+                    {infoIcon && (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1 text-gray-500 cursor-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>
+                        </svg>
+                    )}
+                </p>
+            )}
+        </div>
+        <div className="relative w-40 min-w-0">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className="w-full p-2 bg-gray-700 text-white rounded-lg appearance-none focus:ring-2 focus:ring-green-500 focus:outline-none pr-8 cursor-pointer"
+            >
+                {options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                ))}
+            </select>
+            <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none text-gray-400">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+            </div>
+        </div>
+    </div>
+);
+
+// --- NEW Component: Settings Page ---
+const SettingsPage = ({ navigateTo }) => {
+    // State to mimic user settings
+    const [allowExplicit, setAllowExplicit] = useState(true);
+    const [autoplay, setAutoplay] = useState(true);
+    const [language, setLanguage] = useState('English (English)');
+    const [streamingQuality, setStreamingQuality] = useState('Automatic');
+    const [downloadQuality, setDownloadQuality] = useState('High');
+
+    return (
+        <div className="p-4 sm:p-6 lg:p-8 space-y-12 max-w-4xl mx-auto">
+            
+            {/* Header and Search (Mocked Search Icon) */}
+            <div className="flex justify-between items-center mb-10">
+                <h2 className="text-5xl font-extrabold text-white">Settings</h2>
+                <button 
+                    onClick={() => console.log('Settings Search Clicked')}
+                    className="text-gray-400 hover:text-white transition p-2 rounded-full hover:bg-gray-800"
+                    aria-label="Search Settings"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div className="space-y-6">
+                
+                {/* 1. Account Section */}
+                <div className="border-b border-gray-800 pb-4">
+                    <h2 className="text-2xl font-bold text-white mb-4">Account</h2>
+                    <div className="flex justify-between items-center">
+                        <div className="text-gray-400 text-lg">Edit login methods</div>
+                        <button
+                            onClick={() => console.log('Edit Login Methods Clicked')}
+                            className="text-white bg-gray-700 hover:bg-gray-600 font-semibold py-1 px-4 rounded-full transition duration-200 text-sm border border-gray-600"
+                        >
+                            Edit
+                        </button>
+                    </div>
+                </div>
+
+                {/* 2. Language Section */}
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Language</h2>
+                    <SettingsSelect
+                        title="Choose language"
+                        description="Changes will be applied after restarting the app"
+                        value={language}
+                        options={['English (English)', 'Spanish', 'French', 'German']}
+                        onChange={setLanguage}
+                    />
+                </div>
+
+                {/* 3. Explicit Content Section */}
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Explicit content</h2>
+                    <SettingsToggle
+                        title="Allow explicit content"
+                        description={
+                            <>
+                                Explicit content (labeled with the <span className="text-white font-bold text-lg">E</span> tag) is playable.
+                                <br />
+                                When off, explicit music and podcasts are skipped, and explicit audiobooks (where available) are hidden.
+                            </>
+                        }
+                        isToggled={allowExplicit}
+                        onToggle={() => setAllowExplicit(prev => !prev)}
+                    />
+                </div>
+
+                {/* 4. Autoplay Section */}
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Autoplay</h2>
+                    <SettingsToggle
+                        title="Enjoy nonstop listening"
+                        description="When your audio ends, we'll play you something similar"
+                        isToggled={autoplay}
+                        onToggle={() => setAutoplay(prev => !prev)}
+                    />
+                </div>
+
+                {/* 5. Audio Quality Section */}
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Audio quality</h2>
+                    
+                    {/* Streaming Quality */}
+                    <SettingsSelect
+                        title="Streaming quality"
+                        description=""
+                        value={streamingQuality}
+                        options={['Automatic', 'Low', 'Normal', 'High', 'Very High']}
+                        onChange={setStreamingQuality}
+                    />
+                    
+                    {/* Download Quality */}
+                    <SettingsSelect
+                        title="Download quality"
+                        description="Recommended setting: On"
+                        value={downloadQuality}
+                        options={['Automatic', 'Low', 'Normal', 'High', 'Very High']}
+                        onChange={setDownloadQuality}
+                        infoIcon={true}
+                    />
+                </div>
+
+            </div>
+
+            {/* Mock Back Button for Mobile/User Nav Experience */}
+            <div className="pt-8 flex justify-center">
+                <button 
+                    onClick={() => navigateTo('home')} 
+                    className="text-gray-400 hover:text-white transition duration-200 p-3 rounded-full hover:bg-gray-800 flex items-center space-x-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    <span>Back to Player</span>
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// --- Rest of the App Components (Sidebar, PlayerBar, SongList) remain the same for brevity ---
+
+const Sidebar = ({ userId, handleLogout, handleSearchClick, navigateTo }) => {
+  const isAnonymous = getAuth().currentUser?.isAnonymous; // Simple check for isAnonymous
+  const displayUserId = isAnonymous ? 'Guest User' : (userId || 'Loading...');
+
+  return (
+    <div className="w-64 bg-black p-4 flex flex-col h-full hidden md:flex">
+      <div className="text-xl font-bold text-white mb-8">
+        MusicWave
+      </div>
+      <nav className="space-y-4 flex-grow">
+        {['Home', 'Search', 'Your Library'].map((item) => (
+          <a 
+            key={item} 
+            href="#" 
+            onClick={item === 'Search' ? handleSearchClick : (e) => { e.preventDefault(); if (item === 'Home') navigateTo('home'); }}
+            className="flex items-center space-x-3 text-gray-300 hover:text-white transition duration-200"
+          >
+            {item === 'Home' && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-10v10a1 1 0 001 1h3m-9 0V9.897" />
+              </svg>
+            )}
+            {item === 'Search' && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            )}
+            {item === 'Your Library' && (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              </svg>
+            )}
+            <span className="font-semibold">{item}</span>
+          </a>
+        ))}
+      </nav>
+      <div className="mt-auto pt-4 border-t border-gray-800">
+        <div className="text-sm text-gray-400 truncate mb-2">User: {displayUserId}</div>
+        <button
+          onClick={handleLogout}
+          className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-200"
+        >
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const PlayerBar = ({ currentSong, isPlaying, handlePlayPause, audioElementRef, handleNextSong, handlePrevSong }) => {
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(50); 
+
+  useEffect(() => {
+    const audio = audioElementRef.current;
+    if (!audio) return;
+
+    if (audio.volume === 0.0 && volume === 50) {
+        audio.volume = 0.5;
+    }
+
+    const setAudioData = () => {
+      setDuration(audio.duration);
+      setCurrentTime(audio.currentTime);
+    };
+
+    const updateTime = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    audio.addEventListener('loadedmetadata', setAudioData);
+    audio.addEventListener('timeupdate', updateTime);
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', setAudioData);
+      audio.removeEventListener('timeupdate', updateTime);
+    };
+  }, [currentSong, audioElementRef, volume]);
+
+  const formatTime = (time) => {
+    if (isNaN(time) || time === Infinity) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  const handleVolumeChange = (e) => {
+    const newVolume = Number(e.target.value);
+    setVolume(newVolume);
+    const audio = audioElementRef.current;
+    if (audio) {
+      audio.volume = newVolume / 100;
+    }
+  };
+
+  const getVolumeIcon = () => {
+    if (volume === 0) {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="22" y1="9" x2="16" y2="15"></line>
+            <line x1="16" y1="9" x2="22" y2="15"></line>
+        </svg>
+      );
+    } else if (volume > 50) {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07"></path>
+        </svg>
+      );
+    } else {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 010 7.07"></path>
+        </svg>
+      );
+    }
+  };
+
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 p-3 flex flex-col md:flex-row items-center justify-between shadow-2xl z-20">
+      {currentSong ? (
+        <div className="flex items-center w-full md:w-1/3 mb-2 md:mb-0">
+          <img
+            src={currentSong.cover}
+            alt="Album Art"
+            className="w-12 h-12 rounded mr-3"
+            onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/48x48/1F2937/ffffff?text=♪" }}
+          />
+          <div className="truncate">
+            <div className="text-white font-bold text-sm truncate">{currentSong.title}</div>
+            <div className="text-gray-400 text-xs truncate">{currentSong.artist}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="text-white text-sm w-full md:w-1/3 mb-2 md:mb-0">Select a song to play...</div>
+      )}
+
+      <div className="flex flex-col items-center w-full md:w-1/3">
+        {/* Playback Controls: Prev, Play/Pause, Next */}
+        <div className="flex items-center space-x-6">
+          
+          {/* Previous Button */}
+          <button
+            onClick={handlePrevSong}
+            disabled={!currentSong}
+            className={`text-gray-400 hover:text-white transition duration-300 ${!currentSong ? 'opacity-50 cursor-not-allowed' : ''}`}
+            aria-label="Previous Song"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M12.79 5.23a1 1 0 010 1.54L9.125 10l3.665 3.23a1 1 0 01-1.28 1.54l-4.5-4a1 1 0 010-1.54l4.5-4a1 1 0 011.28 0z" clipRule="evenodd" />
+            </svg>
+          </button>
+
+          {/* Play/Pause Button */}
+          <button
+            onClick={handlePlayPause}
+            disabled={!currentSong}
+            className={`p-3 rounded-full transition duration-300 ${currentSong ? 'bg-white text-black hover:scale-110' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+            aria-label={isPlaying ? "Pause" : "Play"}
+          >
+            {isPlaying ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5 0a1 1 0 012 0v4a1 1 0 11-2 0V8z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+              </svg>
+            )}
+          </button>
+
+          {/* Next Button */}
+          <button
+            onClick={handleNextSong}
+            disabled={!currentSong}
+            className={`text-gray-400 hover:text-white transition duration-300 ${!currentSong ? 'opacity-50 cursor-not-allowed' : ''}`}
+            aria-label="Next Song"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M7.21 14.77a.5.5 0 01-.133-.186l-.164-.264A1 1 0 017 14V6a1 1 0 011.555-.832l4 2.667a1 1 0 010 1.666l-4 2.667A1 1 0 017.21 14.77z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex items-center w-full max-w-sm mt-2">
+          <span className="text-xs text-gray-400 mr-2">{formatTime(currentTime)}</span>
+          <div className="w-full h-1 bg-gray-700 rounded-full">
+            <div
+              className="h-full bg-green-500 rounded-full transition-all duration-100 ease-linear"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+          <span className="text-xs text-gray-400 ml-2">{formatTime(duration)}</span>
+        </div>
+      </div>
+
+      <div className="hidden md:flex justify-end w-1/3">
+        {/* Volume control implementation */}
+        <div className="text-gray-400 flex items-center space-x-2">
+          {getVolumeIcon()}
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={volume}
+            onChange={handleVolumeChange}
+            className="w-24 h-1 appearance-none bg-gray-700 rounded-full cursor-pointer"
+            style={{
+                background: `linear-gradient(to right, #10B981 ${volume}%, #4B5563 ${volume}%)`
+            }}
+            aria-label={`Volume control, current volume: ${volume}%`}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SongList = ({ songs, currentSong, handleSongSelect, searchText }) => {
+  const contentTitle = searchText 
+    ? (songs.length > 0 ? `Search Results for "${searchText}"` : `No results for "${searchText}"`) 
+    : 'Trending Now';
+
+  if (songs.length === 0 && !searchText) {
+    return <div className="text-white p-6">No songs found. Initializing mock data...</div>;
+  }
+
+  return (
+    <div className="space-y-2 p-4 sm:p-6 lg:p-8">
+      <h2 className="text-2xl font-bold text-white mb-4">{contentTitle}</h2>
+      
+      {songs.length > 0 && (
+        <div className="bg-gray-800/50 rounded-xl p-4 shadow-xl">
+          {songs.map((song, index) => (
+            <div
+              key={song.id}
+              onClick={() => handleSongSelect(song)}
+              className={`flex items-center p-3 rounded-lg cursor-pointer transition-all duration-200 ${
+                currentSong?.id === song.id ? 'bg-green-700/50' : 'hover:bg-gray-700/50'
+              }`}
+            >
+              <div className="w-8 text-center text-gray-400 mr-4 font-mono">{index + 1}</div>
+              <img
+                  src={song.cover}
+                  alt="Album Art"
+                  className="w-10 h-10 rounded-md mr-4"
+                  onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/40x40/10B981/ffffff?text=♪" }}
+              />
+              <div className="flex-grow min-w-0">
+                <p className={`text-white font-semibold truncate ${currentSong?.id === song.id ? 'text-green-300' : ''}`}>
+                  {song.title}
+                </p>
+                <p className="text-gray-400 text-sm truncate">{song.artist}</p>
+              </div>
+              <div className="text-gray-400 text-sm ml-auto">{song.duration}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {songs.length === 0 && searchText && (
+        <div className="text-gray-400 p-4 border border-gray-700 rounded-lg">
+          Try searching for "City Beat" or "Cosmic Drift" to see results from the mock song data.
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Main Application Component
+export default function App() {
+  const [firebase, setFirebase] = useState({});
+  const [userId, setUserId] = useState(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
+  const [songs, setSongs] = useState([]);
+  const [currentSong, setCurrentSong] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); 
+  const [searchText, setSearchText] = useState(''); 
+  // Added 'settings' to the possible views
+  const [view, setView] = useState('home'); // State for current view ('home', 'account', 'edit-info', or 'settings')
+
+  // Refs
+  const audioElementRef = useRef(null);
+  const searchInputRef = useRef(null); 
+  const dropdownRef = useRef(null); 
+
+  // Determine if the current user is a guest (anonymous)
+  const isGuest = firebase.auth ? firebase.auth.currentUser?.isAnonymous : true;
+  const isLoggedIn = !!userId && !isGuest;
+
+
+  // --- Filtering Logic ---
+  const filteredSongs = songs.filter(song => {
+    if (!searchText) return true; 
+    const lowerCaseSearch = searchText.toLowerCase();
+    
+    return (
+      song.title.toLowerCase().includes(lowerCaseSearch) ||
+      song.artist.toLowerCase().includes(lowerCaseSearch)
+    );
+  });
+
+
+  // --- Utility for Sidebar Search Click ---
+  const handleSearchClick = (e) => {
+    e.preventDefault();
+    if (searchInputRef.current) {
+      searchInputRef.current.focus(); 
+      setView('home'); // Ensure we are on the music list view when searching
+    }
+  };
+
+  // --- Logout Handler ---
+  const handleLogout = () => {
+    if (firebase.auth) {
+        signOut(firebase.auth).catch(e => console.error("Sign Out Error:", e));
+        setUserId(null); 
+        setView('home'); // Return to home view after logout
+    }
+  };
+
+  // --- Dropdown Click-Outside Handler ---
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
+
+  // --- Firebase Initialization and Authentication ---
+  useEffect(() => {
+    if (Object.keys(firebaseConfig).length === 0) {
+      console.error("Firebase config is missing.");
+      return;
+    }
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    setFirebase({ app, auth, db });
+
+    // 1. Setup Auth Listener & Sign In
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUserId(user.uid);
+      } else {
+        try {
+          if (initialAuthToken) {
+            await signInWithCustomToken(auth, initialAuthToken);
+          } else {
+            await signInAnonymously(auth);
+          }
+        } catch (error) {
+          console.error("Firebase Sign-in Failed:", error);
+        }
+      }
+      setIsAuthChecked(true);
+    });
+
+    // 2. Setup Audio Element
+    const audioEl = new Audio();
+    audioEl.crossOrigin = "anonymous";
+    audioElementRef.current = audioEl;
+
+    return () => {
+      unsubscribe();
+      if (audioElementRef.current) {
+        audioElementRef.current.pause();
+      }
+    };
+  }, []);
+
+  // --- Firestore Data Management ---
+  const initializeSongs = useCallback(async (db) => {
+    const songsCol = collection(db, 'artifacts', appId, 'public', 'data', 'songs');
+    try {
+      const q = query(songsCol);
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        console.log("No songs found. Initializing mock data.");
+        await Promise.all(mockSongs.map(song =>
+          setDoc(doc(songsCol, song.id), song)
+        ));
+      }
+    } catch (error) {
+      console.error("Error initializing mock data:", error);
+    }
+  }, []);
+
+  // Effect to fetch and listen to songs
+  useEffect(() => {
+    const { db } = firebase;
+    if (!db || !isAuthChecked) return;
+
+    initializeSongs(db);
+
+    const songsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'songs');
+    const unsubscribe = onSnapshot(songsColRef, (snapshot) => {
+      const songList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setSongs(songList);
+    }, (error) => {
+      console.error("Error fetching songs:", error);
+    });
+
+    return () => unsubscribe();
+  }, [firebase, isAuthChecked, initializeSongs]);
+
+  // --- Playback Logic ---
+  
+  const handlePlayPause = useCallback(() => {
+    const audio = audioElementRef.current;
+    if (!audio || !currentSong) return;
+
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play().catch(error => {
+        console.error("Playback failed (user interaction required):", error);
+      });
+    }
+    setIsPlaying(!isPlaying);
+  }, [isPlaying, currentSong]);
+
+
+  const handleSongSelect = useCallback((song) => {
+    const audio = audioElementRef.current;
+    if (!audio) return;
+
+    if (currentSong?.id === song.id) {
+      handlePlayPause(); 
+      return;
+    }
+
+    setCurrentSong(song);
+    audio.src = song.audioUrl;
+    audio.load();
+    audio.play()
+      .then(() => setIsPlaying(true))
+      .catch(error => {
+        console.error("Error playing audio:", error);
+        setIsPlaying(false);
+      });
+  }, [currentSong, handlePlayPause]);
+
+  const handleNextSong = useCallback(() => {
+    if (songs.length === 0) return;
+
+    const listToUse = searchText ? filteredSongs : songs;
+    const currentIndex = listToUse.findIndex(s => s.id === currentSong?.id);
+    
+    if (currentIndex === -1 && listToUse.length > 0) {
+        handleSongSelect(listToUse[0]);
+        return;
+    }
+
+    const nextIndex = (currentIndex + 1) % listToUse.length;
+    const nextSong = listToUse[nextIndex];
+
+    if (nextSong) {
+      handleSongSelect(nextSong);
+    } else if (listToUse.length > 0) {
+      handleSongSelect(listToUse[0]);
+    }
+  }, [songs, currentSong, handleSongSelect, searchText, filteredSongs]);
+
+  const handlePrevSong = useCallback(() => {
+    if (songs.length === 0) return;
+
+    const listToUse = searchText ? filteredSongs : songs;
+    const currentIndex = listToUse.findIndex(s => s.id === currentSong?.id);
+
+    if (currentIndex === -1 && listToUse.length > 0) {
+        handleSongSelect(listToUse[listToUse.length - 1]);
+        return;
+    }
+    
+    const prevIndex = (currentIndex - 1 + listToUse.length) % listToUse.length;
+    const prevSong = listToUse[prevIndex];
+
+    if (prevSong) {
+      handleSongSelect(prevSong);
+    } else if (listToUse.length > 0) {
+      handleSongSelect(listToUse[listToUse.length - 1]);
+    }
+  }, [songs, currentSong, handleSongSelect, searchText, filteredSongs]);
+
+  // Handle song ending
+  useEffect(() => {
+    const audio = audioElementRef.current;
+    if (!audio) return;
+
+    const handleEnd = () => {
+      setIsPlaying(false);
+      handleNextSong();
+    };
+
+    audio.addEventListener('ended', handleEnd);
+    return () => audio.removeEventListener('ended', handleEnd);
+  }, [handleNextSong]);
+
+  if (!isAuthChecked || !firebase.auth) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-green-500 text-xl animate-pulse">
+          Connecting to MusicWave...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-black">
+      <Sidebar userId={userId} handleLogout={handleLogout} handleSearchClick={handleSearchClick} navigateTo={setView} />
+      
+      <div className="flex-1 flex flex-col min-h-screen pb-20">
+        <header className="sticky top-0 bg-gray-900/90 backdrop-blur-sm p-4 flex justify-between items-center z-10">
+            <h1 className="text-xl font-bold text-white md:hidden">MusicWave</h1>
+            
+            <SearchBar 
+                searchText={searchText}
+                setSearchText={setSearchText}
+                searchInputRef={searchInputRef}
+            />
+
+            <div className="relative flex space-x-2" ref={dropdownRef}>
+                {isLoggedIn ? (
+                    <>
+                        <button 
+                            onClick={() => setIsDropdownOpen(prev => !prev)} 
+                            className="text-gray-400 hover:text-white transition duration-300 flex items-center space-x-2 mr-4"
+                            aria-label="Notifications"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 01-3.46 0"></path></svg>
+                        </button>
+                        <button 
+                            onClick={() => setIsDropdownOpen(prev => !prev)} 
+                            className="bg-black text-white font-bold p-0 rounded-full hover:scale-105 transition flex items-center justify-center h-10 w-10 overflow-hidden ring-2 ring-green-500/50 focus:ring-green-500" 
+                            aria-label="Profile Menu"
+                        >
+                             <img 
+                                src="https://placehold.co/40x40/000000/ff0000?text=P" 
+                                onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/40x40/1F2937/ffffff?text=P" }}
+                                alt="Profile Avatar"
+                                className="w-full h-full object-cover"
+                             />
+                        </button>
+
+                        {isDropdownOpen && (
+                            <ProfileDropdown 
+                                userId={userId} 
+                                handleLogout={handleLogout} 
+                                closeDropdown={() => setIsDropdownOpen(false)}
+                                navigateTo={setView} // Passed down the setView function
+                            />
+                        )}
+                    </>
+                ) : (
+                  <>
+                    <button 
+                        onClick={() => setShowAuthModal(true)}
+                        className="bg-gray-800 text-white font-bold py-2 px-6 rounded-full text-sm hover:bg-gray-700 hover:scale-105 transition"
+                    >
+                        Sign Up
+                    </button>
+                    <button 
+                        onClick={() => { setShowAuthModal(true); }}
+                        className="bg-white text-black font-bold py-2 px-6 rounded-full text-sm hover:scale-105 transition"
+                    >
+                        Log In
+                    </button>
+                  </>
+                )}
+            </div>
+        </header>
+        
+        <main className="flex-1 overflow-y-auto bg-gray-900">
+            {view === 'home' && (
+                <SongList 
+                    songs={filteredSongs} 
+                    currentSong={currentSong} 
+                    handleSongSelect={handleSongSelect} 
+                    searchText={searchText} 
+                />
+            )}
+            {view === 'account' && (
+                <AccountSettingsPage navigateTo={setView} />
+            )}
+            {view === 'edit-info' && (
+                <EditPersonalInfoPage navigateTo={setView} userId={userId} />
+            )}
+            {/* NEW: Settings View */}
+            {view === 'settings' && (
+                <SettingsPage navigateTo={setView} />
+            )}
+        </main>
+
+        <PlayerBar
+          currentSong={currentSong}
+          isPlaying={isPlaying}
+          handlePlayPause={handlePlayPause}
+          handleNextSong={handleNextSong}
+          handlePrevSong={handlePrevSong}
+          audioElementRef={audioElementRef}
+        />
+      </div>
+
+      <AuthModal 
+        auth={firebase.auth} 
+        showAuthModal={showAuthModal} 
+        setShowAuthModal={setShowAuthModal} 
+      />
+    </div>
+  );
+}
