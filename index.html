@@ -8,75 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Lucide Icons for aesthetic icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        /* Custom styles for dark theme */
-        body {
-            background-color: #0d1117; /* Very dark background */
-            color: #c9d1d9; /* Light text */
-            font-family: 'Inter', sans-serif;
-        }
-
-        /* Customize scrollbar for a sleek dark look */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: #2e353f; /* Darker thumb */
-            border-radius: 4px;
-        }
-
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #0d1117; /* Match body background */
-        }
-
-        /* Sidebar styles */
-        .sidebar {
-            transition: width 0.3s ease;
-        }
-
-        /* Player progress bar styling */
-        .progress-bar-container {
-            height: 4px;
-            background-color: #2e353f;
-            cursor: pointer;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            background-color: #1ed760; /* Spotify green highlight */
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-
-        /* Ensure interactive elements have nice transitions */
-        .interactive-item {
-            transition: background-color 0.15s ease, transform 0.1s ease;
-        }
-
-        .interactive-item:hover {
-            background-color: #1e2229; /* Slightly lighter hover */
-        }
-        
-        /* Song item hover effect */
-        .song-item:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        /* Active song highlight */
-        .song-item.active {
-            background-color: #1ed76020; /* Light green background */
-            border-left: 3px solid #1ed760;
-        }
-
-        /* Utility for centering icons */
-        .icon-center {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-    </style>
+   <link rel="stylesheet" href="style.css">
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
 
