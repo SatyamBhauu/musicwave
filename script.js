@@ -243,3 +243,4 @@
             // Set initial volume slider position
             document.getElementById('volume-slider').value = state.volume * 100;
         });
+   lucide.createIcons();
