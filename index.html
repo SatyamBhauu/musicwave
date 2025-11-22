@@ -143,6 +143,25 @@
     return remoteRequest(`users/${encodeURIComponent(username)}`, 'PUT', payload);
   }
 
+  // Fetch remote tracks from API_BASE + '/tracks' and prepend to `tracks` list
+  async function fetchRemoteTracks(){
+    if (!API_BASE) return;
+    try{
+      const url = API_BASE.replace(/\/$/,'') + '/tracks';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.statusText || 'Failed');
+      const data = await res.json();
+      if (data && Array.isArray(data.tracks) && data.tracks.length){
+        // prepend remote tracks so they show first
+        data.tracks.reverse().forEach(t => {
+          // ensure minimal fields exist so UI can render
+          tracks.unshift({ id: t.filename || ('r_' + Date.now()), title: t.title || t.filename, artist: t.artist || '', url: t.url, color: t.color || 'hsl(200 40% 40%)' });
+        });
+        renderGrid();
+      }
+    }catch(e){ console.warn('Failed to fetch remote tracks', e); }
+  }
+
   // Show a simple settings prompt to set API base and reload
   function setApiBase(){
     const current = localStorage.getItem('mw_api_base') || '';
@@ -655,6 +674,7 @@
   userMenu.className = 'user-menu hidden';
   userMenu.innerHTML = `
     <button id="menu-profile">Profile</button>
+    <button id="menu-setapi">Set API Base</button>
     <button id="menu-signout">Sign out</button>
   `;
   document.body.appendChild(userMenu);
@@ -682,6 +702,10 @@
       logoutUser(); hideUserMenu();
       return;
     }
+    if (target && target.id === 'menu-setapi'){
+      hideUserMenu(); setApiBase();
+      return;
+    }
     if (target && target.id === 'menu-profile'){
       const u = getCurrentUser();
       alert(u ? `Profile:\n${u.display} (${u.username})` : 'No profile');
@@ -700,8 +724,11 @@
   // render user on load
   renderUserUI();
 
-  // Initial render
-  renderGrid(); renderDiscover(); updatePlayerUI(); showView('home');
+  // Load remote tracks (if API base configured) then initial render
+  (async ()=>{
+    try{ await fetchRemoteTracks(); }catch(e){}
+    renderGrid(); renderDiscover(); updatePlayerUI(); showView('home');
+  })();
   </script>
 </body>
 </html>
