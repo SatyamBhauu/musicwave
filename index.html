@@ -648,7 +648,7 @@
   function openAuth(){ if (authModal) { authModal.classList.remove('hidden'); authModal.setAttribute('aria-hidden','false'); } }
   function closeAuth(){ if (authModal) { authModal.classList.add('hidden'); authModal.setAttribute('aria-hidden','true'); } }
 
-  if (el('user-btn')) el('user-btn').addEventListener('click', ()=>{ const u = getCurrentUser(); if (u) { if (confirm('Sign out?')) logoutUser(); } else openAuth(); });
+  // user button click handled later (toggles menu or opens auth)
   if (authClose) authClose.addEventListener('click', closeAuth);
   if (tabLogin) tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabSignup.classList.remove('active'); panelLogin.classList.remove('hidden'); panelSignup.classList.add('hidden'); });
   if (tabSignup) tabSignup.addEventListener('click', ()=>{ tabSignup.classList.add('active'); tabLogin.classList.remove('active'); panelSignup.classList.remove('hidden'); panelLogin.classList.add('hidden'); });
