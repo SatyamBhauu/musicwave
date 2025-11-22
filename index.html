@@ -151,15 +151,28 @@
       const res = await fetch(url);
       if (!res.ok) throw new Error(res.statusText || 'Failed');
       const data = await res.json();
-      if (data && Array.isArray(data.tracks) && data.tracks.length){
-        // prepend remote tracks so they show first
-        data.tracks.reverse().forEach(t => {
-          // ensure minimal fields exist so UI can render
-          tracks.unshift({ id: t.filename || ('r_' + Date.now()), title: t.title || t.filename, artist: t.artist || '', url: t.url, color: t.color || 'hsl(200 40% 40%)' });
+      if (!data || !Array.isArray(data.tracks)) return;
+      // build set of known urls to avoid duplicates
+      const known = new Set(tracks.map(t => t.url));
+      // add remote tracks (ensure absolute URL)
+      data.tracks.forEach(t=>{
+        let trackUrl = t.url || '';
+        if (trackUrl && trackUrl.startsWith('/')) trackUrl = API_BASE.replace(/\/$/,'') + trackUrl;
+        if (!trackUrl || known.has(trackUrl)) return;
+        known.add(trackUrl);
+        tracks.unshift({
+          id: t.filename || ('r_'+Date.now()),
+          title: t.title || t.filename,
+          artist: t.artist || '',
+          url: trackUrl,
+          color: t.color || 'hsl(200 40% 40%)',
+          remote: true // mark as remote if you want to style differently
         });
-        renderGrid();
-      }
-    }catch(e){ console.warn('Failed to fetch remote tracks', e); }
+      });
+      renderGrid();
+    }catch(e){
+      console.warn('Failed to fetch remote tracks', e);
+    }
   }
 
   // Show a simple settings prompt to set API base and reload
@@ -674,7 +687,6 @@
   userMenu.className = 'user-menu hidden';
   userMenu.innerHTML = `
     <button id="menu-profile">Profile</button>
-    <button id="menu-setapi">Set API Base</button>
     <button id="menu-signout">Sign out</button>
   `;
   document.body.appendChild(userMenu);
@@ -702,10 +714,7 @@
       logoutUser(); hideUserMenu();
       return;
     }
-    if (target && target.id === 'menu-setapi'){
-      hideUserMenu(); setApiBase();
-      return;
-    }
+    
     if (target && target.id === 'menu-profile'){
       const u = getCurrentUser();
       alert(u ? `Profile:\n${u.display} (${u.username})` : 'No profile');
