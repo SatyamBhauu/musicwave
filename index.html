@@ -78,6 +78,19 @@
         <button id="signup-btn">Create account</button>
       </div>
     </div>
+
+      <!-- Playlist modal (create new playlist) -->
+      <div id="playlist-modal" class="modal hidden" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-label="Create playlist">
+          <button class="close" id="playlist-close">✕</button>
+          <h3 style="margin:0 0 8px 0">Create playlist</h3>
+          <input id="playlist-name-input" placeholder="Playlist name" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;box-sizing:border-box" />
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+            <button id="playlist-cancel" style="padding:8px 12px;border-radius:8px;background:transparent;border:0;cursor:pointer">Cancel</button>
+            <button id="playlist-create" style="padding:8px 12px;border-radius:8px;background:var(--accent);color:white;border:0;cursor:pointer">Create</button>
+          </div>
+        </div>
+      </div>
   </div>
 
   <footer class="player">
