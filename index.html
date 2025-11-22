@@ -49,6 +49,26 @@
         <div id="discover" class="grid"></div>
       </section>
 
+      <!-- Profile view -->
+      <section id="profile-view" class="content view hidden">
+        <div class="profile-header">
+          <div class="profile-avatar-wrap">
+            <img id="profile-avatar-img" class="profile-avatar" src="" alt="avatar">
+            <button id="profile-change-btn" class="profile-change-btn">Change photo</button>
+          </div>
+          <div class="profile-meta">
+            <div class="profile-role">Profile</div>
+            <h1 id="profile-display" class="profile-name">User</h1>
+            <div id="profile-stats" class="profile-stats">0 Followers • 0 Following</div>
+          </div>
+        </div>
+        <div style="margin-top:18px">
+          <h3>Top artists this month</h3>
+          <div id="profile-artists" class="grid" style="margin-top:12px"></div>
+        </div>
+        <input id="profile-avatar-input" type="file" accept="image/*" class="hidden" />
+      </section>
+
     </main>
   </div>
 
@@ -476,6 +496,48 @@
     renderCards(discoverEl, sample);
   }
 
+  // --- Profile rendering & avatar update ---
+  const profileView = el('profile-view');
+  const profileAvatarImg = el('profile-avatar-img');
+  const profileDisplayEl = el('profile-display');
+  const profileStats = el('profile-stats');
+  const profileArtists = el('profile-artists');
+  const profileAvatarInput = el('profile-avatar-input');
+  const profileChangeBtn = el('profile-change-btn');
+
+  function showProfile(){
+    const u = getCurrentUser();
+    if (!u) { openAuth(); return; }
+    // show profile view and hide others
+    homeView.classList.add('hidden'); searchView.classList.add('hidden'); if (profileView) profileView.classList.remove('hidden');
+    renderProfile();
+  }
+
+  function renderProfile(){
+    const u = getCurrentUser();
+    if (!u) return;
+    if (profileAvatarImg) profileAvatarImg.src = u.avatar || '';
+    if (profileDisplayEl) profileDisplayEl.textContent = u.display || u.username;
+    if (profileStats) profileStats.textContent = (u.followers||0) + ' Followers • ' + (u.following||0) + ' Following';
+    // show some sample artists (reuse discover logic)
+    if (profileArtists) renderCards(profileArtists, tracks.slice(0,8));
+  }
+
+  // change avatar flow
+  if (profileChangeBtn) profileChangeBtn.addEventListener('click', ()=>{ if (profileAvatarInput) profileAvatarInput.click(); });
+  if (profileAvatarInput) profileAvatarInput.addEventListener('change', async (e)=>{
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    try{
+      const dataUrl = await resizeImage(f, 256);
+      const users = loadUsers(); const cur = localStorage.getItem('mw_current'); if (!cur) return alert('Sign in first');
+      const found = users[cur]; if (!found) return;
+      found.avatar = dataUrl;
+      saveUsers(users);
+      try{ await syncCurrentUserToServer(); }catch(e){}
+      renderUserUI(); renderProfile();
+    }catch(err){ console.error('Avatar update failed', err); alert('Failed to update avatar'); }
+  });
+
   // Router
   function showView(name){
     if (name === 'home'){
@@ -751,9 +813,8 @@
     }
     
     if (target && target.id === 'menu-profile'){
-      const u = getCurrentUser();
-      alert(u ? `Profile:\n${u.display} (${u.username})` : 'No profile');
       hideUserMenu();
+      showProfile();
       return;
     }
     // hide menu when clicking outside
