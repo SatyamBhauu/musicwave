@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Search · Music Wve</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="logo">Music Wave</div>
+      <nav class="nav">
+        <a class="nav-item" href="index.html">Home</a>
+        <a class="nav-item active" href="search.html">Search</a>
+        <a class="nav-item">Your Library</a>
+      </nav>
+      <div class="playlists">
+        <h4>Your Playlists</h4>
+        <ul id="playlist-list"></ul>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="search">
+          <input id="search-input" placeholder="Search songs, artists, albums" autofocus />
+        </div>
+        <div class="user">Guest</div>
+      </header>
+
+      <section class="content">
+        <h2>Search Results</h2>
+        <div id="results" class="grid"></div>
+
+        <h2 style="margin-top:20px">Discover</h2>
+        <div id="discover" class="grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="player">
+    <div class="player-left">
+      <div class="cover" id="cover"></div>
+      <div class="track-info">
+        <div id="title">Not Playing</div>
+        <div id="artist">—</div>
+      </div>
+    </div>
+
+    <div class="player-center">
+      <div class="controls">
+        <button id="prev" title="Previous">⟲</button>
+        <button id="play" title="Play">►</button>
+        <button id="next" title="Next">⟲</button>
+      </div>
+
+      <div class="progress">
+        <span id="current-time">0:00</span>
+        <input type="range" id="progress" min="0" max="100" value="0">
+        <span id="duration">0:00</span>
+      </div>
+    </div>
+
+    <div class="player-right">
+      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" title="Volume">
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+  <script src="search.js"></script>
+</body>
+</html>
