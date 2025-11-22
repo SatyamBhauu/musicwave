@@ -80,6 +80,19 @@
     </div>
   </div>
 
+  <!-- Upload modal (for signed-in users) -->
+  <div id="upload-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-label="Upload Track">
+      <button class="close" id="upload-close">✕</button>
+      <h3 style="margin:6px 0 12px 0">Upload Track</h3>
+      <input id="upload-title" placeholder="Title" />
+      <input id="upload-artist" placeholder="Artist" />
+      <input id="upload-file" type="file" accept="audio/*" />
+      <div id="upload-error" class="auth-error"></div>
+      <button id="upload-btn">Upload</button>
+    </div>
+  </div>
+
   <footer class="player">
     <div class="player-left">
       <div class="cover" id="cover" aria-hidden="true"></div>
@@ -325,12 +338,17 @@
     currentTimeEl.textContent = fmt(audio.currentTime || 0);
   }
 
-  function setCurrent(idx){
+  async function setCurrent(idx){
     if (idx<0 || idx>=tracks.length) return;
     currentIndex = idx;
     const t = tracks[currentIndex];
-    if (audio.src !== t.url) audio.src = t.url;
-    audio.play();
+    // resolve blob URL if stored in IndexedDB or marker
+    let src = t.url || '';
+    if (t.fileId || (src && src.startsWith('blob:'))){
+      try{ const resolved = await getBlobURLForTrack(t); if (resolved) src = resolved; }catch(e){ console.warn('Could not resolve blob URL', e); }
+    }
+    if (audio.src !== src) audio.src = src;
+    try{ await audio.play(); }catch(e){ /* autoplay blocked or error */ }
     playBtn.textContent = '❚❚';
     updatePlayerUI();
   }
@@ -655,6 +673,7 @@
   userMenu.className = 'user-menu hidden';
   userMenu.innerHTML = `
     <button id="menu-profile">Profile</button>
+    <button id="menu-upload">Upload</button>
     <button id="menu-signout">Sign out</button>
   `;
   document.body.appendChild(userMenu);
@@ -678,6 +697,12 @@
   // menu actions
   document.body.addEventListener('click', (e)=>{
     const target = e.target;
+    if (target && target.id === 'menu-upload'){
+      const u = getCurrentUser();
+      if (!u) { alert('Sign in to upload'); return; }
+      openUploadModal(); hideUserMenu();
+      return;
+    }
     if (target && (target.id === 'menu-signout')){
       logoutUser(); hideUserMenu();
       return;
@@ -697,7 +722,165 @@
   });
 
   // render user on load
+  // --- Upload + storage helpers (IndexedDB + server upload) ---
+  // IndexedDB: store file blobs and track metadata locally when server not available
+  function openIDB(){
+    return new Promise((resolve,reject)=>{
+      const req = indexedDB.open('mw_media', 1);
+      req.onupgradeneeded = (ev)=>{
+        const db = ev.target.result;
+        if (!db.objectStoreNames.contains('files')) db.createObjectStore('files', { keyPath: 'id', autoIncrement: true });
+        if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks', { keyPath: 'id' });
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+
+  async function saveFileToIDB(file){
+    const db = await openIDB();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction('files','readwrite');
+      const store = tx.objectStore('files');
+      const r = store.add({ blob: file, filename: file.name, size: file.size, type: file.type });
+      r.onsuccess = (e)=> resolve(e.target.result);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function saveTrackMetaToIDB(track){
+    const db = await openIDB();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction('tracks','readwrite');
+      const store = tx.objectStore('tracks');
+      const r = store.put(track);
+      r.onsuccess = ()=> resolve(true);
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function getFileBlobFromIDB(fileId){
+    const db = await openIDB();
+    return new Promise((resolve,reject)=>{
+      const tx = db.transaction('files','readonly');
+      const store = tx.objectStore('files');
+      const r = store.get(fileId);
+      r.onsuccess = (e)=>{
+        const rec = e.target.result; resolve(rec ? rec.blob : null);
+      };
+      r.onerror = ()=> reject(r.error);
+    });
+  }
+
+  async function getBlobURLForTrack(track){
+    if (track.url && track.url.startsWith('blob:')) return track.url;
+    if (track.fileId){
+      const blob = await getFileBlobFromIDB(track.fileId);
+      if (!blob) return null;
+      return URL.createObjectURL(blob);
+    }
+    return track.url || null;
+  }
+
+  // Upload to server endpoint (mysqladmin/upload.php)
+  async function uploadFileToServer(file){
+    if (!API_BASE) throw new Error('No API base set');
+    const url = API_BASE.replace(/\/$/,'') + '/upload.php';
+    const fd = new FormData(); fd.append('file', file);
+    const res = await fetch(url, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('Upload failed: ' + res.statusText);
+    return await res.json();
+  }
+
+  // High-level: add uploaded track to user's record and to UI. Tries server first, falls back to IndexedDB.
+  async function addUploadedTrack(file, meta){
+    const cur = localStorage.getItem('mw_current'); if (!cur) throw new Error('Sign in to upload');
+    const users = loadUsers(); users[cur] = users[cur] || {};
+    const trackId = 't_' + Date.now();
+    let trackObj = { id: trackId, title: meta.title || file.name, artist: meta.artist || '', owner: cur, uploadedAt: Date.now() };
+    // Try server upload
+    if (API_BASE){
+      try{
+        const r = await uploadFileToServer(file);
+        if (r && r.url){ trackObj.url = r.url; }
+      }catch(e){
+        console.warn('Server upload failed, saving to IndexedDB instead:', e.message);
+      }
+    }
+    // If no remote URL, save file to IDB and create blob URL reference
+    if (!trackObj.url){
+      try{
+        const fileId = await saveFileToIDB(file);
+        trackObj.fileId = fileId;
+        trackObj.url = 'blob:' + fileId; // marker; actual blob URL created at playback time
+        await saveTrackMetaToIDB(Object.assign({}, trackObj));
+      }catch(e){ console.error('Failed to save to IDB', e); }
+    }
+    // save to user's uploads list
+    users[cur].uploads = users[cur].uploads || [];
+    users[cur].uploads.unshift(trackObj);
+    saveUsers(users);
+    // attempt to sync user metadata (not the blobs) to server
+    try{ await syncCurrentUserToServer(); }catch(e){/* ignore */}
+    // add to UI
+    tracks.unshift(trackObj);
+    renderGrid(); renderPlaylists();
+    return trackObj;
+  }
+
+  // Upload modal helpers
+  const uploadModal = el('upload-modal');
+  const uploadClose = el('upload-close');
+  const uploadBtn = el('upload-btn');
+  function openUploadModal(){ if (uploadModal) { uploadModal.classList.remove('hidden'); uploadModal.setAttribute('aria-hidden','false'); } }
+  function closeUploadModal(){ if (uploadModal) { uploadModal.classList.add('hidden'); uploadModal.setAttribute('aria-hidden','true'); } }
+  if (uploadClose) uploadClose.addEventListener('click', closeUploadModal);
+  if (uploadBtn) uploadBtn.addEventListener('click', async ()=>{
+    const fileEl = el('upload-file'); const title = el('upload-title').value.trim(); const artist = el('upload-artist').value.trim(); const err = el('upload-error'); if (err) err.textContent='';
+    if (!fileEl || !fileEl.files || !fileEl.files[0]) { if (err) err.textContent='Choose an audio file'; return; }
+    const file = fileEl.files[0];
+    try{
+      uploadBtn.disabled = true; uploadBtn.textContent = 'Uploading...';
+      const track = await addUploadedTrack(file, { title, artist });
+      closeUploadModal();
+      // cleanup inputs
+      fileEl.value = ''; el('upload-title').value = ''; el('upload-artist').value = '';
+      alert('Uploaded: ' + (track.title || file.name));
+    }catch(e){ if (err) err.textContent = e.message } finally { uploadBtn.disabled = false; uploadBtn.textContent = 'Upload'; }
+  });
+
+  // At startup merge any existing user uploads into the tracks array and try to pull remote uploads if API configured
+  async function integrateUserUploads(){
+    const cur = getCurrentUser();
+    if (!cur) return;
+    // merge local uploads
+    const u = cur;
+    if (u.uploads && Array.isArray(u.uploads)){
+      // ensure uploads are first
+      u.uploads.slice().reverse().forEach(t=> tracks.unshift(t));
+    }
+    // if API configured try to fetch remote user to get latest uploads (merge)
+    if (API_BASE){
+      try{
+        const remote = await remoteGetUser(cur.username);
+        if (remote && remote.uploads && Array.isArray(remote.uploads)){
+          // add remote uploads not already in local list (by id or url)
+          const known = new Set((u.uploads||[]).map(x=>x.id).concat((u.uploads||[]).map(x=>x.url)));
+          remote.uploads.forEach(t=>{ if (!known.has(t.id) && !known.has(t.url)) tracks.unshift(t); });
+          // also merge remote into local and save
+          const users = loadUsers(); users[cur.username] = users[cur.username] || {};
+          users[cur.username].uploads = remote.uploads;
+          saveUsers(users);
+        }
+      }catch(e){ console.warn('Could not fetch remote user uploads', e.message); }
+    }
+    renderGrid();
+  }
+
+  // render user on load
   renderUserUI();
+  // integrate uploads (local or remote) into tracks
+  integrateUserUploads().catch(()=>{});
 
   // Initial render
   renderGrid(); renderDiscover(); updatePlayerUI(); showView('home');
