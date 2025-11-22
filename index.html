@@ -339,14 +339,7 @@
     // create new playlist button
     const createLi = document.createElement('li'); createLi.style.padding='8px 6px';
     const createBtn = document.createElement('button'); createBtn.textContent = '+ New Playlist'; createBtn.style.width='100%'; createBtn.style.border='0'; createBtn.style.background='transparent'; createBtn.style.color='var(--accent)'; createBtn.style.cursor='pointer';
-    createBtn.onclick = ()=>{
-      const name = prompt('Playlist name'); if (!name) return;
-      const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return alert('Sign in first');
-      const found = users[curUser]; if (!found) return;
-      found.playlists = found.playlists || [];
-      const newP = { id: 'pl_'+Date.now(), title: name, tracks: [] };
-      found.playlists.push(newP); saveUsers(users); syncCurrentUserToServer(); renderPlaylists();
-    };
+    createBtn.onclick = ()=>{ openPlaylistModal(); };
     createLi.appendChild(createBtn); listEl.appendChild(createLi);
   }
 
@@ -659,6 +652,35 @@
   if (authClose) authClose.addEventListener('click', closeAuth);
   if (tabLogin) tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabSignup.classList.remove('active'); panelLogin.classList.remove('hidden'); panelSignup.classList.add('hidden'); });
   if (tabSignup) tabSignup.addEventListener('click', ()=>{ tabSignup.classList.add('active'); tabLogin.classList.remove('active'); panelSignup.classList.remove('hidden'); panelLogin.classList.add('hidden'); });
+
+  // --- Playlist modal helpers ---
+  const playlistModal = el('playlist-modal');
+  const playlistClose = el('playlist-close');
+  const playlistNameInput = el('playlist-name-input');
+  const playlistCreateBtn = el('playlist-create');
+  const playlistCancelBtn = el('playlist-cancel');
+
+  function openPlaylistModal(){ if (playlistModal) { playlistModal.classList.remove('hidden'); playlistModal.setAttribute('aria-hidden','false'); setTimeout(()=>{ if (playlistNameInput) playlistNameInput.focus(); },50); } }
+  function closePlaylistModal(){ if (playlistModal) { playlistModal.classList.add('hidden'); playlistModal.setAttribute('aria-hidden','true'); } if (playlistNameInput) playlistNameInput.value = ''; }
+
+  async function createPlaylistFromModal(){
+    const name = playlistNameInput && playlistNameInput.value && playlistNameInput.value.trim();
+    if (!name) return alert('Please enter a playlist name');
+    const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return alert('Sign in first');
+    const found = users[curUser]; if (!found) return;
+    found.playlists = found.playlists || [];
+    const newP = { id: 'pl_'+Date.now(), title: name, tracks: [] };
+    found.playlists.push(newP);
+    saveUsers(users);
+    syncCurrentUserToServer();
+    renderPlaylists();
+    closePlaylistModal();
+  }
+
+  if (playlistClose) playlistClose.addEventListener('click', closePlaylistModal);
+  if (playlistCancelBtn) playlistCancelBtn.addEventListener('click', closePlaylistModal);
+  if (playlistCreateBtn) playlistCreateBtn.addEventListener('click', createPlaylistFromModal);
+  if (playlistNameInput) playlistNameInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') createPlaylistFromModal(); if (e.key === 'Escape') closePlaylistModal(); });
 
   // Login flow
   if (el('login-btn')) el('login-btn').addEventListener('click', async ()=>{
