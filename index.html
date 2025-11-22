@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Music Wave</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <meta name="description" content="Music Wave - a modern music web UI inspired by popular streaming apps." />
 </head>
@@ -12,8 +14,7 @@
     <aside class="sidebar">
       <div class="logo">Music Wave</div>
       <nav class="nav">
-        <a class="nav-item active" href="index.html">Home</a>
-        <a class="nav-item" href="search.html">Search</a>
+        <a class="nav-item active" id="nav-home">Home</a>
         <a class="nav-item">Your Library</a>
       </nav>
       <div class="playlists">
@@ -24,22 +25,64 @@
 
     <main class="main">
       <header class="topbar">
-        <div class="search">
-          <input id="search" placeholder="Search for artists, songs, or podcasts" />
-        </div>
-        <div class="user">Guest</div>
+            <div class="search">
+              <input id="search" placeholder="Search for artists, songs, or podcasts" />
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="user" id="user-btn">Guest</div>
+            </div>
       </header>
 
-      <section class="content">
+      <!-- Home view -->
+      <section id="home-view" class="content view">
         <h2>Made for you</h2>
         <div id="grid" class="grid"></div>
       </section>
+
+      <!-- Search view (hidden by default) -->
+      <section id="search-view" class="content view hidden">
+        <h2>Search Results</h2>
+        <input id="search-input" class="search-large" placeholder="Search songs, artists, albums" />
+        <div id="results" class="grid" style="margin-top:12px"></div>
+
+        <h2 style="margin-top:20px">Discover</h2>
+        <div id="discover" class="grid"></div>
+      </section>
+
     </main>
+  </div>
+
+  <!-- Auth modal (login / signup) -->
+  <div id="auth-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-content" role="dialog" aria-modal="true" aria-label="Authentication">
+      <button class="close" id="auth-close">✕</button>
+      <div class="auth-tabs">
+        <button id="tab-login" class="active">Login</button>
+        <button id="tab-signup">Sign up</button>
+      </div>
+
+      <div id="auth-login" class="auth-panel">
+        <input id="login-username" placeholder="Username" />
+        <input id="login-password" type="password" placeholder="Password" />
+        <div id="login-error" class="auth-error"></div>
+        <button id="login-btn">Login</button>
+      </div>
+
+      <div id="auth-signup" class="auth-panel hidden">
+        <input id="signup-username" placeholder="Username" />
+        <input id="signup-display" placeholder="Display name (optional)" />
+        <input id="signup-password" type="password" placeholder="Password" />
+        <input id="signup-password2" type="password" placeholder="Confirm password" />
+        <input id="signup-avatar" type="file" accept="image/*" />
+        <div id="signup-error" class="auth-error"></div>
+        <button id="signup-btn">Create account</button>
+      </div>
+    </div>
   </div>
 
   <footer class="player">
     <div class="player-left">
-      <div class="cover" id="cover"></div>
+      <div class="cover" id="cover" aria-hidden="true"></div>
       <div class="track-info">
         <div id="title">Not Playing</div>
         <div id="artist">—</div>
@@ -48,9 +91,9 @@
 
     <div class="player-center">
       <div class="controls">
-        <button id="prev" title="Previous">⟲</button>
-        <button id="play" title="Play">►</button>
-        <button id="next" title="Next">⟲</button>
+        <button id="prev" title="Previous" aria-label="Previous track">⟲</button>
+        <button id="play" title="Play" aria-label="Play or pause">►</button>
+        <button id="next" title="Next" aria-label="Next track">⟲</button>
       </div>
 
       <div class="progress">
@@ -65,6 +108,599 @@
     </div>
   </footer>
 
-  <script src="app.js"></script>
+  <script>
+  // SPA + audio player implementation (inlined from app.js)
+  // --- Remote API configuration (optional) ---
+  // If you want to use your phone as a simple server (AWebServer), set
+  // `API_BASE` to the full base URL of your API, e.g. `http://192.168.0.12:8080/api`.
+  // Leave as `null` to keep using localStorage only.
+  // NOTE: Your phone server must return proper CORS headers (Access-Control-Allow-Origin: *).
+  // Read API_BASE from localStorage so it can be changed in-app.
+  const API_BASE = localStorage.getItem('mw_api_base') || null; // set via Settings (⚙)
+
+  async function remoteRequest(path, method = 'GET', body = null){
+    if (!API_BASE) throw new Error('No remote API configured');
+    const url = API_BASE.replace(/\/$/,'') + '/' + path.replace(/^\//,'');
+    const opts = { method, headers: {} };
+    if (body !== null){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    const res = await fetch(url, opts);
+    if (!res.ok){ const t = await res.text(); throw new Error(t || res.statusText); }
+    // try to parse JSON, otherwise return text
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch(e){ return txt; }
+  }
+
+  async function remoteCreateUser(username, payload){
+    // POST /users  { username, payload }
+    return remoteRequest('users', 'POST', { username, ...payload });
+  }
+  async function remoteGetUser(username){
+    // GET /users/:username
+    return remoteRequest(`users/${encodeURIComponent(username)}`, 'GET');
+  }
+  async function remoteSaveUser(username, payload){
+    // PUT /users/:username
+    return remoteRequest(`users/${encodeURIComponent(username)}`, 'PUT', payload);
+  }
+
+  // Show a simple settings prompt to set API base and reload
+  function setApiBase(){
+    const current = localStorage.getItem('mw_api_base') || '';
+    const v = prompt('API base URL (include http:// and path), e.g. http://192.168.31.192:8080/mysqladmin', current);
+    if (v === null) return;
+    const val = v.trim();
+    if (val) localStorage.setItem('mw_api_base', val); else localStorage.removeItem('mw_api_base');
+    alert('Saved. The page will reload to apply the new API base.');
+    location.reload();
+  }
+
+  const tracks = [];
+  // sample public MP3s (royalty-free/public sample files). You can replace these with your own URLs.
+  const sampleUrls = [
+    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_700KB.mp3',
+    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_1MG.mp3',
+    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_2MG.mp3'
+  ];
+  for (let i=1;i<=12;i++){
+    tracks.push({
+      id:i,
+      title:`Song ${i}`,
+      artist:`Artist ${((i-1)%6)+1}`,
+      color: `hsl(${(i*35)%360} 60% 50%)`,
+      url: sampleUrls[i % sampleUrls.length]
+    });
+  }
+
+  // State
+  let currentIndex = -1;
+
+  // Elements
+  const el = id => document.getElementById(id);
+  const grid = el('grid');
+  const cover = el('cover');
+  const titleEl = el('title');
+  const artistEl = el('artist');
+  const durationEl = el('duration');
+  const currentTimeEl = el('current-time');
+  const progressEl = el('progress');
+  const playBtn = el('play');
+  const prevBtn = el('prev');
+  const nextBtn = el('next');
+  const volumeEl = el('volume');
+  const audio = document.createElement('audio');
+  audio.id = 'audio';
+  audio.preload = 'metadata';
+  document.body.appendChild(audio);
+
+  // Views
+  const homeView = el('home-view');
+  const searchView = el('search-view');
+  const searchInput = el('search-input') || null; // search view input
+  const topSearch = el('search'); // topbar input
+  const resultsEl = el('results');
+  const discoverEl = el('discover');
+
+  function fmt(s){
+    s = Math.max(0,Math.floor(s));
+    return Math.floor(s/60)+":"+String(s%60).padStart(2,'0');
+  }
+
+  function renderGrid(){
+    grid.innerHTML='';
+    tracks.forEach((t,idx)=>{
+      const card = document.createElement('div');
+      card.className='card';
+      card.onclick = ()=> setCurrent(idx);
+      const art = document.createElement('div'); art.className='art'; art.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
+      const meta = document.createElement('div'); meta.className='meta';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title;
+      const sub = document.createElement('div'); sub.className='subtitle'; sub.textContent = t.artist;
+      meta.appendChild(title); meta.appendChild(sub);
+      card.appendChild(art); card.appendChild(meta);
+      grid.appendChild(card);
+    });
+  }
+
+  // playlists removed from UI; no-op placeholder if needed later
+  function renderPlaylists(){
+    let listEl = el('playlist-list');
+    if (!listEl){
+      const pcont = document.querySelector('.playlists');
+      if (!pcont) return;
+      listEl = document.createElement('ul'); listEl.id = 'playlist-list';
+      pcont.appendChild(listEl);
+    }
+    listEl.innerHTML = '';
+    const u = getCurrentUser();
+    if (!u){
+      listEl.innerHTML = `<li style="color:var(--muted);padding:6px">Sign in to see your playlists</li>`;
+      return;
+    }
+    const pls = (u.playlists && Array.isArray(u.playlists)) ? u.playlists : [];
+    if (pls.length === 0){
+      const empty = document.createElement('li');
+      empty.style.color = 'var(--muted)'; empty.style.padding = '6px';
+      empty.textContent = 'No playlists yet';
+      listEl.appendChild(empty);
+    } else {
+      pls.forEach((p)=>{
+        const li = document.createElement('li');
+        li.style.padding = '8px 6px';
+        li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.alignItems = 'center';
+        const left = document.createElement('div'); left.style.display='flex'; left.style.gap='8px'; left.style.alignItems='center';
+        const name = document.createElement('span'); name.textContent = p.title; name.style.cursor='pointer';
+        name.onclick = ()=>{
+          // show only playlist tracks in grid
+          const ids = (p.tracks||[]);
+          const filtered = tracks.filter(t=> ids.includes(t.id));
+          if (filtered.length) renderCards(grid, filtered); else alert('Playlist is empty');
+        };
+        left.appendChild(name);
+        const count = document.createElement('span'); count.textContent = `(${(p.tracks||[]).length})`; count.style.color='var(--muted)';
+        left.appendChild(count);
+        const right = document.createElement('div');
+        const addBtn = document.createElement('button'); addBtn.textContent = '+ add current'; addBtn.title='Add current track';
+        addBtn.style.border='0'; addBtn.style.background='transparent'; addBtn.style.color='var(--muted)'; addBtn.style.cursor='pointer';
+        addBtn.onclick = (e)=>{
+          e.stopPropagation();
+          if (currentIndex < 0){ alert('No track playing'); return; }
+          const users = loadUsers();
+          const curUser = localStorage.getItem('mw_current');
+          if (!curUser) return alert('Sign in first');
+          const found = users[curUser]; if (!found) return;
+          found.playlists = found.playlists || [];
+          const target = found.playlists.find(x=>x.id===p.id);
+          if (!target) return;
+          if (!target.tracks) target.tracks = [];
+          if (!target.tracks.includes(tracks[currentIndex].id)) target.tracks.push(tracks[currentIndex].id);
+          saveUsers(users);
+          // try to sync this user's data to remote server
+          syncCurrentUserToServer();
+          renderPlaylists();
+        };
+        const delBtn = document.createElement('button'); delBtn.textContent = '🗑'; delBtn.title='Delete playlist'; delBtn.style.border='0'; delBtn.style.background='transparent'; delBtn.style.color='var(--muted)'; delBtn.style.cursor='pointer';
+        delBtn.onclick = (e)=>{
+          e.stopPropagation(); if (!confirm('Delete playlist?')) return;
+          const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return;
+          const found = users[curUser]; if (!found) return;
+          found.playlists = (found.playlists||[]).filter(x=>x.id!==p.id);
+          saveUsers(users); syncCurrentUserToServer(); renderPlaylists();
+        };
+        right.appendChild(addBtn); right.appendChild(delBtn);
+        li.appendChild(left); li.appendChild(right);
+        listEl.appendChild(li);
+      });
+    }
+    // create new playlist button
+    const createLi = document.createElement('li'); createLi.style.padding='8px 6px';
+    const createBtn = document.createElement('button'); createBtn.textContent = '+ New Playlist'; createBtn.style.width='100%'; createBtn.style.border='0'; createBtn.style.background='transparent'; createBtn.style.color='var(--accent)'; createBtn.style.cursor='pointer';
+    createBtn.onclick = ()=>{
+      const name = prompt('Playlist name'); if (!name) return;
+      const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return alert('Sign in first');
+      const found = users[curUser]; if (!found) return;
+      found.playlists = found.playlists || [];
+      const newP = { id: 'pl_'+Date.now(), title: name, tracks: [] };
+      found.playlists.push(newP); saveUsers(users); syncCurrentUserToServer(); renderPlaylists();
+    };
+    createLi.appendChild(createBtn); listEl.appendChild(createLi);
+  }
+
+  function updatePlayerUI(){
+    if (currentIndex<0){
+      cover.style.background = '';
+      titleEl.textContent = 'Not Playing';
+      artistEl.textContent = '—';
+      durationEl.textContent = '0:00';
+      progressEl.value = 0;
+      currentTimeEl.textContent = '0:00';
+      return;
+    }
+    const t = tracks[currentIndex];
+    cover.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
+    titleEl.textContent = t.title;
+    artistEl.textContent = t.artist;
+    durationEl.textContent = audio.duration ? fmt(audio.duration) : '0:00';
+    progressEl.max = Math.floor(audio.duration || 0);
+    progressEl.value = Math.floor(audio.currentTime || 0);
+    currentTimeEl.textContent = fmt(audio.currentTime || 0);
+  }
+
+  function setCurrent(idx){
+    if (idx<0 || idx>=tracks.length) return;
+    currentIndex = idx;
+    const t = tracks[currentIndex];
+    if (audio.src !== t.url) audio.src = t.url;
+    audio.play();
+    playBtn.textContent = '❚❚';
+    updatePlayerUI();
+  }
+
+  function togglePlay(){
+    if (audio.paused){
+      if (!audio.src && tracks.length) setCurrent(0);
+      else audio.play();
+      playBtn.textContent = '❚❚';
+    } else {
+      audio.pause();
+      playBtn.textContent = '►';
+    }
+  }
+
+  function next(){
+    if (currentIndex < 0) return setCurrent(0);
+    setCurrent((currentIndex+1) % tracks.length);
+  }
+
+  function prev(){
+    if (currentIndex < 0) return setCurrent(0);
+    setCurrent((currentIndex-1+tracks.length) % tracks.length);
+  }
+
+  // Audio events
+  audio.addEventListener('timeupdate', updatePlayerUI);
+  audio.addEventListener('loadedmetadata', updatePlayerUI);
+  audio.addEventListener('ended', next);
+
+  // toggle cover animation based on playback
+  audio.addEventListener('play', ()=>{ if (cover) cover.classList.add('playing'); });
+  audio.addEventListener('pause', ()=>{ if (cover) cover.classList.remove('playing'); });
+
+  playBtn.addEventListener('click', togglePlay);
+  nextBtn.addEventListener('click', next);
+  prevBtn.addEventListener('click', prev);
+
+  progressEl.addEventListener('input', (e)=>{
+    audio.currentTime = Number(e.target.value);
+    updatePlayerUI();
+  });
+
+  volumeEl.addEventListener('input', (e)=>{ audio.volume = Number(e.target.value); });
+
+  // Keyboard shortcuts: space = play/pause, left/right = seek, up/down = volume
+  document.addEventListener('keydown', (e)=>{
+    // ignore inputs
+    const tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.code === 'Space'){
+      e.preventDefault();
+      togglePlay();
+    } else if (e.code === 'ArrowRight'){
+      audio.currentTime = Math.min((audio.currentTime||0) + 5, audio.duration || Infinity);
+    } else if (e.code === 'ArrowLeft'){
+      audio.currentTime = Math.max((audio.currentTime||0) - 5, 0);
+    } else if (e.code === 'ArrowUp'){
+      audio.volume = Math.min(1, (audio.volume || 0.5) + 0.05);
+      if (volumeEl) volumeEl.value = audio.volume;
+    } else if (e.code === 'ArrowDown'){
+      audio.volume = Math.max(0, (audio.volume || 0.5) - 0.05);
+      if (volumeEl) volumeEl.value = audio.volume;
+    }
+  });
+
+  // Search & Discover
+  function renderCards(container, list){
+    container.innerHTML = '';
+    if (!list || list.length === 0){
+      container.innerHTML = `<div style="color:var(--muted);padding:8px">No results</div>`;
+      return;
+    }
+    list.forEach((t)=>{
+      const card = document.createElement('div');
+      card.className='card';
+      const art = document.createElement('div'); art.className='art'; art.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
+      const meta = document.createElement('div'); meta.className='meta';
+      const title = document.createElement('div'); title.className='title'; title.textContent = t.title;
+      const sub = document.createElement('div'); sub.className='subtitle'; sub.textContent = t.artist;
+      meta.appendChild(title); meta.appendChild(sub);
+      card.appendChild(art); card.appendChild(meta);
+      card.onclick = ()=>{
+        const i = tracks.findIndex(x=>x.id===t.id);
+        setCurrent(i);
+        showView('home');
+      };
+      container.appendChild(card);
+    });
+  }
+
+  function doSearch(q){
+    q = (q||'').trim().toLowerCase();
+    if (!q) {
+      resultsEl.innerHTML = '<div style="color:var(--muted);padding:8px">Type to search songs or artists</div>';
+      return;
+    }
+    const out = tracks.filter(t=> t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
+    renderCards(resultsEl, out);
+  }
+
+  function renderDiscover(){
+    const sample = [];
+    for (let i=0;i<8;i++) sample.push(tracks[(i*3)%tracks.length]);
+    renderCards(discoverEl, sample);
+  }
+
+  // Router
+  function showView(name){
+    if (name === 'home'){
+      homeView.classList.remove('hidden'); searchView.classList.add('hidden');
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      const h = document.getElementById('nav-home'); if (h) h.classList.add('active');
+    } else if (name === 'search'){
+      homeView.classList.add('hidden'); searchView.classList.remove('hidden');
+      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+      const s = document.getElementById('nav-search'); if (s) s.classList.add('active');
+      if (searchInput) searchInput.focus();
+    }
+  }
+
+  // nav handlers
+  const navSearch = document.getElementById('nav-search'); if (navSearch) navSearch.addEventListener('click', ()=> showView('search'));
+  const navHome = document.getElementById('nav-home'); if (navHome) navHome.addEventListener('click', ()=> showView('home'));
+  if (topSearch){ topSearch.addEventListener('focus', ()=> showView('search')); topSearch.addEventListener('click', ()=> showView('search')); }
+
+  if (searchInput){ searchInput.addEventListener('input', (e)=> doSearch(e.target.value)); searchInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') doSearch(e.target.value); }); }
+
+  // --- Authentication (client-side, localStorage) ---
+  function readFileAsDataUrl(file){
+    return new Promise((resolve,reject)=>{
+      const fr = new FileReader();
+      fr.onload = ()=> resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  // Resize image client-side to limit storage size and dimensions
+  function resizeImage(file, maxDim = 256){
+    return new Promise((resolve,reject)=>{
+      if (!file) return resolve(null);
+      const img = new Image();
+      const fr = new FileReader();
+      fr.onload = ()=>{
+        img.onload = ()=>{
+          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
+          const w = Math.round(img.width * ratio);
+          const h = Math.round(img.height * ratio);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.clearRect(0,0,w,h);
+          ctx.drawImage(img,0,0,w,h);
+          // default to jpeg to reduce size
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve(dataUrl);
+        };
+        img.onerror = (err)=> reject(err);
+        img.src = fr.result;
+      };
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  async function hashPassword(pw){
+    const enc = new TextEncoder().encode(pw);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function loadUsers(){
+    try{return JSON.parse(localStorage.getItem('mw_users')||'{}')}catch(e){return {}};
+  }
+
+  function saveUsers(u){ localStorage.setItem('mw_users', JSON.stringify(u)); }
+
+  // When users are updated locally, attempt to sync the current user's record to the remote server (if configured).
+  async function syncCurrentUserToServer(){
+    if (!API_BASE) return;
+    const cur = localStorage.getItem('mw_current'); if (!cur) return;
+    const users = loadUsers(); if (!users[cur]) return;
+    try{
+      await remoteSaveUser(cur, users[cur]);
+    }catch(e){ console.warn('Failed to sync user to server:', e.message); }
+  }
+
+  async function createUser(username,password,display,avatarData){
+    const users = loadUsers();
+    if (users[username]) throw new Error('Username already exists');
+    const hash = await hashPassword(password);
+    const localRecord = { hash, display: display || username, avatar: avatarData || null, playlists: [] };
+    // If remote API configured, try creating remotely first, fall back to local
+    if (API_BASE){
+      try{
+        await remoteCreateUser(username, { hash, display: display || username, avatar: avatarData || null, playlists: [] });
+        // after remote created, also save locally for offline fallback
+        users[username] = localRecord; saveUsers(users);
+        localStorage.setItem('mw_current', username);
+        return users[username];
+      }catch(e){
+        console.warn('Remote create failed, falling back to local:', e.message);
+      }
+    }
+    users[username] = localRecord;
+    saveUsers(users);
+    localStorage.setItem('mw_current', username);
+    return users[username];
+  }
+
+  async function loginUser(username,password){
+    // Try remote login if API configured
+    if (API_BASE){
+      try{
+        // send username+pw (hashed client-side) or rely on server to verify
+        const hash = await hashPassword(password);
+        const remote = await remoteRequest('login', 'POST', { username, hash });
+        // remote should return user object on success
+        if (remote && remote.username){
+          // save locally as cache
+          const users = loadUsers();
+          users[username] = { hash: remote.hash || hash, display: remote.display || username, avatar: remote.avatar || null, playlists: remote.playlists || [] };
+          saveUsers(users);
+          localStorage.setItem('mw_current', username);
+          return users[username];
+        }
+      }catch(e){
+        console.warn('Remote login failed, falling back to local:', e.message);
+      }
+    }
+    const users = loadUsers();
+    if (!users[username]) throw new Error('No such user');
+    const hash = await hashPassword(password);
+    if (hash !== users[username].hash) throw new Error('Incorrect password');
+    localStorage.setItem('mw_current', username);
+    return users[username];
+  }
+
+  function logoutUser(){ localStorage.removeItem('mw_current'); renderUserUI(); }
+
+  function getCurrentUser(){ const u = localStorage.getItem('mw_current'); if (!u) return null; const users = loadUsers(); return users[u] ? { username: u, ...users[u] } : null; }
+
+  function renderUserUI(){
+    const userBtn = el('user-btn');
+    const u = getCurrentUser();
+    if (!userBtn) return;
+    if (!u){
+      userBtn.innerHTML = 'Guest';
+      userBtn.title = 'Login or sign up';
+    } else {
+      const displayName = u.display || u.username || '';
+      let avatarHtml = '';
+      if (u.avatar){
+        avatarHtml = `<img src="${u.avatar}" class="user-avatar" alt="${displayName} avatar">`;
+      } else {
+        const initials = (displayName.split(' ').map(s=>s[0]).join('') || displayName.slice(0,2)).toUpperCase().slice(0,2);
+        // choose a deterministic hue from the display name
+        const hue = Array.from(displayName).reduce((acc,ch)=>acc + ch.charCodeAt(0), 0) % 360;
+        avatarHtml = `<div class="user-avatar user-avatar-initials" style="background:hsl(${hue} 60% 40%);">${initials}</div>`;
+      }
+      userBtn.innerHTML = `${avatarHtml}<span class="user-name">${displayName}</span>`;
+      userBtn.title = `Signed in as ${u.username}`;
+    }
+    // update playlists for current user
+    renderPlaylists();
+  }
+
+  // Auth modal helpers
+  const authModal = el('auth-modal');
+  const authClose = el('auth-close');
+  const tabLogin = el('tab-login');
+  const tabSignup = el('tab-signup');
+  const panelLogin = el('auth-login');
+  const panelSignup = el('auth-signup');
+
+  function openAuth(){ if (authModal) { authModal.classList.remove('hidden'); authModal.setAttribute('aria-hidden','false'); } }
+  function closeAuth(){ if (authModal) { authModal.classList.add('hidden'); authModal.setAttribute('aria-hidden','true'); } }
+
+  if (el('user-btn')) el('user-btn').addEventListener('click', ()=>{ const u = getCurrentUser(); if (u) { if (confirm('Sign out?')) logoutUser(); } else openAuth(); });
+  if (authClose) authClose.addEventListener('click', closeAuth);
+  if (tabLogin) tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabSignup.classList.remove('active'); panelLogin.classList.remove('hidden'); panelSignup.classList.add('hidden'); });
+  if (tabSignup) tabSignup.addEventListener('click', ()=>{ tabSignup.classList.add('active'); tabLogin.classList.remove('active'); panelSignup.classList.remove('hidden'); panelLogin.classList.add('hidden'); });
+
+  // Login flow
+  if (el('login-btn')) el('login-btn').addEventListener('click', async ()=>{
+    const user = el('login-username').value.trim();
+    const pw = el('login-password').value || '';
+    const err = el('login-error'); err.textContent = '';
+    try{
+      if (!user || !pw) throw new Error('Provide username and password');
+      await loginUser(user,pw);
+      renderUserUI(); closeAuth();
+    }catch(e){ if (err) err.textContent = e.message }
+  });
+
+  // Signup flow
+  if (el('signup-btn')) el('signup-btn').addEventListener('click', async ()=>{
+    const user = el('signup-username').value.trim();
+    const display = el('signup-display').value.trim();
+    const pw = el('signup-password').value || '';
+    const pw2 = el('signup-password2').value || '';
+    const file = el('signup-avatar').files && el('signup-avatar').files[0];
+    const err = el('signup-error'); err.textContent = '';
+    try{
+      if (!user) throw new Error('Choose a username');
+      if (pw.length < 4) throw new Error('Password must be at least 4 characters');
+      if (pw !== pw2) throw new Error('Passwords do not match');
+      let avatarData = null;
+      if (file) avatarData = await resizeImage(file, 256);
+      await createUser(user,pw,display,avatarData);
+      renderUserUI(); closeAuth();
+      // attempt to sync newly created user to remote (if configured)
+      syncCurrentUserToServer();
+    }catch(e){ if (err) err.textContent = e.message }
+  });
+
+  // --- User dropdown menu (for signed-in users) ---
+  // create menu element and append to body
+  const userMenu = document.createElement('div');
+  userMenu.id = 'user-menu';
+  userMenu.className = 'user-menu hidden';
+  userMenu.innerHTML = `
+    <button id="menu-profile">Profile</button>
+    <button id="menu-signout">Sign out</button>
+  `;
+  document.body.appendChild(userMenu);
+
+  function showUserMenu(){
+    const ub = el('user-btn'); if (!ub) return;
+    const rect = ub.getBoundingClientRect();
+    userMenu.style.right = (document.documentElement.clientWidth - rect.right + 18) + 'px';
+    userMenu.style.top = (rect.bottom + 8) + 'px';
+    userMenu.classList.remove('hidden');
+  }
+  function hideUserMenu(){ userMenu.classList.add('hidden'); }
+
+  // click behavior: if logged-in toggle menu, otherwise open auth
+  if (el('user-btn')) el('user-btn').addEventListener('click', ()=>{
+    const u = getCurrentUser();
+    if (!u) return openAuth();
+    if (userMenu.classList.contains('hidden')) showUserMenu(); else hideUserMenu();
+  });
+
+  // menu actions
+  document.body.addEventListener('click', (e)=>{
+    const target = e.target;
+    if (target && (target.id === 'menu-signout')){
+      logoutUser(); hideUserMenu();
+      return;
+    }
+    if (target && target.id === 'menu-profile'){
+      const u = getCurrentUser();
+      alert(u ? `Profile:\n${u.display} (${u.username})` : 'No profile');
+      hideUserMenu();
+      return;
+    }
+    // hide menu when clicking outside
+    const ub = el('user-btn');
+    if (!ub) return;
+    if (userMenu.classList.contains('hidden')) return;
+    if (target === ub || ub.contains(target) || userMenu.contains(target)) return;
+    hideUserMenu();
+  });
+
+  // render user on load
+  renderUserUI();
+
+  // Initial render
+  renderGrid(); renderDiscover(); updatePlayerUI(); showView('home');
+  </script>
 </body>
 </html>
