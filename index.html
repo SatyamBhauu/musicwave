@@ -3,113 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Wave</title>
+    <title>Music Wave - Spotify Clone</title>
     <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDK Imports -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+
+        // Set Firebase Log Level to Debug
+        setLogLevel('Debug');
+        
+        // --- Global Variables (Canvas Environment) ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        if (firebaseConfig) {
+            const app = initializeApp(firebaseConfig);
+            window.db = getFirestore(app);
+            window.auth = getAuth(app);
+        } else {
+            console.error("Firebase configuration is missing.");
+            window.auth = null;
+            window.db = null;
+        }
+
+        /**
+         * Initializes authentication, signs in the user, and sets up the auth state listener.
+         */
+        window.initializeAuth = async function() {
+            if (!window.auth) return;
+
+            try {
+                if (initialAuthToken) {
+                    await signInWithCustomToken(window.auth, initialAuthToken);
+                    console.log("Signed in with custom token.");
+                } else {
+                    await signInAnonymously(window.auth);
+                    console.log("Signed in anonymously.");
+                }
+            } catch (error) {
+                console.error("Initial sign-in failed:", error.message);
+            }
+
+            // Set up listener to manage UI state
+            onAuthStateChanged(window.auth, (user) => {
+                if (user) {
+                    window.USER_STATE.isLoggedIn = true;
+                    window.USER_STATE.userId = user.uid;
+                    // Derive a simple display name
+                    window.USER_STATE.displayName = user.email ? user.email.split('@')[0] : 'Guest User';
+                } else {
+                    // For anonymous or logged-out users
+                    window.USER_STATE.isLoggedIn = false;
+                    window.USER_STATE.userId = null;
+                    window.USER_STATE.displayName = 'Log In';
+                }
+                // Update UI after state change
+                window.updateAuthUI();
+                
+                // Firestore: Create initial user profile on first sign-up/login
+                if (user && window.USER_STATE.isLoggedIn) {
+                    // Public user document path
+                    const userDocRef = doc(window.db, `artifacts/${appId}/public/data/users`, user.uid);
+                    getDoc(userDocRef).then(docSnap => {
+                        if (!docSnap.exists()) {
+                            setDoc(userDocRef, { 
+                                userId: user.uid, 
+                                email: user.email || 'anonymous',
+                                displayName: window.USER_STATE.displayName,
+                                createdAt: new Date()
+                            });
+                            console.log("New user profile created in Firestore.");
+                        }
+                    });
+                }
+            });
+        }
+        
+        // Attach functions to the window object so they can be called from standard script tags
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.signOut = signOut;
+        
+        // This function will be called once the DOM is ready
+        document.addEventListener('DOMContentLoaded', window.initializeAuth);
+    </script>
+
     <style>
-        /* Custom colors and variables */
+        /* Custom Spotify-Inspired Colors and Variables */
         :root {
-            /* Deeper, richer dark colors */
-            --bg-dark-main: #0E0E10; /* Darker main background */
-            --bg-dark-card: #1C1C1E; /* Slightly lighter card/section background */
-            --bg-dark-sidebar: #07070A; /* Deepest black for sidebar */
-            --accent-green: #1ED760; /* Slightly brighter, more modern green */
-            --accent-purple: #9540FF; /* Vibrant purple */
-            --playlist-ogryzek-gradient: linear-gradient(180deg, #A88647 0%, #302613 100%); /* Gold/Brown Gradient for Ogryzek */
+            --bg-dark-main: #121212; /* Main Content Background */
+            --bg-dark-card: #181818; /* Card/Section Background */
+            --bg-dark-sidebar: #000000; /* Deepest black for sidebar/footer */
+            --accent-green: #1DB954; /* Spotify Green */
+            --text-light: #FFFFFF;
+            --text-muted: #B3B3B3; /* Spotify gray text */
+            --hover-dark: #282828; /* Card hover background */
+            --active-nav: #343434; /* Active navigation item */
         }
         body {
-            background-color: black;
+            background-color: var(--bg-dark-main);
             font-family: 'Inter', sans-serif;
+            color: var(--text-light);
+            /* Prevent body scroll and use flex layout */
+            overflow: hidden; 
         }
         .sidebar {
             background-color: var(--bg-dark-sidebar);
-            /* Added a subtle shadow/border to detach it slightly */
-            border-right: 1px solid #1c1c1e; 
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
         }
         .main-content {
             background-color: var(--bg-dark-main);
+            /* Gradient for home page */
+            background-image: linear-gradient(180deg, rgba(135, 206, 235, 0.2) 0%, rgba(18, 18, 18, 1) 20%);
         }
         .card-bg {
             background-color: var(--bg-dark-card);
         }
 
-        /* Glassmorphism for Header/Footer */
-        .glass-header {
-            background-color: rgba(14, 14, 16, 0.9); /* Opaque background */
-            backdrop-filter: blur(8px); /* Subtle blur effect */
-            -webkit-backdrop-filter: blur(8px);
-        }
-        .glass-footer {
-            background-color: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-top: 1px solid #1c1c1e;
+        /* Sticky Header */
+        .sticky-header {
+            background-color: rgba(18, 18, 18, 0.85); 
+            backdrop-filter: blur(12px); 
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease;
         }
 
-        /* Custom Scrollbar for better integration */
+        /* Footer (Player Bar) */
+        .player-bar {
+            background-color: var(--bg-dark-sidebar); 
+            border-top: 1px solid #000;
+        }
+
+        /* Custom Scrollbar (Subtle) */
         .custom-scrollbar::-webkit-scrollbar {
             width: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #333; /* Darker thumb */
+            background-color: #535353; /* Spotify scrollbar color */
             border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
             background-color: transparent;
         }
 
-        /* Play Button specific modern styling */
+        /* Play Button Animation (Standard Spotify look) */
         .play-button {
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            box-shadow: 0 4px 15px rgba(30, 215, 96, 0.4);
+            box-shadow: 0 8px 8px rgba(0, 0, 0, 0.3);
         }
         .play-button:hover {
-            transform: scale(1.08);
-            box-shadow: 0 6px 20px rgba(30, 215, 96, 0.6);
+            transform: scale(1.05);
         }
         
-        /* Playlist specific background style */
-        #ogryzek-playlist-detail {
-            /* Ensures the gradient covers the top half, but the bottom becomes the main dark background */
-            background-color: var(--bg-dark-main); 
+        /* Card Hover Effect */
+        .release-card {
+            transition: background-color 0.2s, transform 0.2s;
         }
-        .ogryzek-header-gradient {
-             /* Use padding-top to define the gradient area height */
-            background: var(--playlist-ogryzek-gradient);
-            padding-top: 200px; 
-            transition: background 0.3s;
+        .release-card:hover {
+            background-color: #282828; 
         }
+
+        /* Track Row Hover */
         .track-row:hover {
             background-color: rgba(255, 255, 255, 0.05);
         }
+
+        /* Hide the default link icon on the sidebar on mobile */
+        @media (max-width: 1023px) {
+            .sidebar { display: none; }
+        }
+
+        /* Adjust gradient height for playlist detail */
+        .ogryzek-header-gradient {
+            padding-top: 150px; 
+            min-height: 340px;
+            background: linear-gradient(180deg, #A88647 0%, #121212 100%);
+        }
         
+        /* Seek Bar Styling */
+        .seek-bar-track {
+            background-color: var(--text-muted);
+        }
+        .seek-bar-progress {
+            background-color: var(--text-light);
+        }
+        .seek-bar-container:hover .seek-bar-progress {
+            background-color: var(--accent-green);
+        }
+        .seek-bar-container:hover .seek-bar-knob {
+            opacity: 1;
+        }
+        .seek-bar-knob {
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        /* Modal specific styling */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .auth-card {
+            background-color: #1a1a1a;
+        }
+        .auth-input {
+            background-color: #2a2a2a;
+            color: white;
+            border: 1px solid #535353;
+        }
+        .auth-input:focus {
+            border-color: var(--accent-green);
+            box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.5);
+        }
+        .auth-button {
+            background-color: var(--accent-green);
+            color: black;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="text-white">
 
-    <!-- Notification Box (Hidden by default) --><div id="notification-box" class="bg-green-600 shadow-lg fixed top-4 right-4 z-50 p-3 rounded-lg opacity-0 transition duration-300 ease-in-out transform -translate-y-4">
-        <p id="notification-message" class="font-semibold"></p>
+    <!-- Notification Box (Hidden by default) --><div id="notification-box" class="bg-[var(--accent-green)] shadow-xl fixed top-4 right-4 z-50 p-3 rounded-lg opacity-0 transition duration-300 ease-in-out transform -translate-y-4">
+        <p id="notification-message" class="font-semibold text-black"></p>
+    </div>
+
+    <!-- 1. Authentication Modal (Initially Hidden) -->
+    <div id="auth-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop transition-opacity duration-300">
+        <div class="auth-card w-full max-w-md p-8 rounded-xl shadow-2xl relative">
+            <h2 class="text-3xl font-extrabold mb-6 text-center">
+                <span id="auth-title">Log In</span> to Music Wave
+            </h2>
+            <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-[var(--text-muted)] hover:text-white transition">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            
+            <form id="auth-form" onsubmit="handleAuth(event)">
+                <div class="mb-4">
+                    <label for="auth-email" class="block text-sm font-semibold mb-2 text-white">Email address</label>
+                    <input type="email" id="auth-email" class="auth-input w-full p-3 rounded-md focus:outline-none" required placeholder="name@example.com">
+                </div>
+                <div class="mb-6">
+                    <label for="auth-password" class="block text-sm font-semibold mb-2 text-white">Password</label>
+                    <input type="password" id="auth-password" class="auth-input w-full p-3 rounded-md focus:outline-none" required placeholder="Must be 6+ characters">
+                </div>
+                
+                <p id="auth-error" class="text-red-500 text-sm mb-4 hidden"></p>
+
+                <button type="submit" id="auth-submit-button" class="auth-button w-full p-3 rounded-full uppercase tracking-wider text-sm hover:scale-[1.01] transition duration-150">
+                    Log In
+                </button>
+            </form>
+
+            <div class="text-center mt-6 text-sm">
+                <p id="auth-prompt-text" class="text-white">Don't have an account? 
+                    <button onclick="toggleAuthMode()" class="text-white font-bold hover:underline">Sign Up</button>
+                </p>
+            </div>
+        </div>
     </div>
 
     <div id="app" class="h-screen w-screen flex flex-col gap-0 p-0 overflow-hidden">
         
-        <!-- Top Section (Sidebar + Main View) --><div class="flex flex-1 overflow-hidden gap-0">
+        <!-- Top Section (Sidebar + Main View) --><div class="flex flex-1 overflow-hidden gap-2 p-2 pb-0">
             
-            <!-- LEFT SIDEBAR --><aside class="sidebar w-72 flex flex-col text-sm border-r border-zinc-900">
+            <!-- LEFT SIDEBAR --><aside class="sidebar w-72 lg:flex flex-col text-sm space-y-2">
                 
-                <!-- Navigation Section --><div class="bg-[var(--bg-dark-sidebar)] p-4 pt-6 space-y-6">
-                    <div class="flex items-center space-x-2 text-xl font-extrabold text-[var(--accent-green)]">
-                        <!-- Music Wave Logo/Icon Placeholder --><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15.5v-11a.5.5 0 01.815-.395l6 5.5a.5.5 0 010 .79l-6 5.5a.5.5 0 01-.815-.395z"/></svg>
-                        <span class="text-white text-2xl">Music Wave</span>
+                <!-- Navigation Section (Home/Search) --><div class="bg-[var(--bg-dark-card)] p-4 space-y-2 rounded-lg">
+                    <div class="flex items-center space-x-2 text-xl font-extrabold text-[var(--accent-green)] mb-4">
+                        <!-- Music Wave Logo/Icon Placeholder -->
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15.5v-11a.5.5 0 01.815-.395l6 5.5a.5.5 0 010 .79l-6 5.5a.5.5 0 01-.815-.395z"/></svg>
+                        <span class="text-white text-lg font-black tracking-wider">MUSIC WAVE</span>
                     </div>
-                    <ul class="space-y-2">
-                        <!-- Navigation Links --><li class="group">
-                            <!-- Click on Home brings back to Home View --><a href="#" id="nav-home" class="flex items-center space-x-4 p-2 rounded-lg text-white font-bold bg-zinc-800 transition duration-150">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <ul class="space-y-1">
+                        <!-- Home -->
+                        <li class="group">
+                            <a href="#" id="nav-home" class="flex items-center space-x-4 p-2 rounded-md font-bold text-white transition duration-150 bg-[var(--active-nav)]">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                                 <span>Home</span>
                             </a>
                         </li>
+                        <!-- Search -->
                         <li class="group">
-                            <a href="#" class="flex items-center space-x-4 p-2 rounded-lg text-gray-400 hover:text-white transition duration-150">
+                            <a href="#" class="flex items-center space-x-4 p-2 rounded-md text-[var(--text-muted)] hover:text-white transition duration-150">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                                 <span>Search</span>
                             </a>
@@ -117,106 +300,259 @@
                     </ul>
                 </div>
                 
-                <!-- Library Section --><div class="bg-[var(--bg-dark-sidebar)] flex flex-col flex-1 p-4 overflow-y-auto custom-scrollbar">
+                <!-- Library Section (Scrollable) --><div class="bg-[var(--bg-dark-card)] flex flex-col flex-1 p-2 rounded-lg overflow-hidden">
                     
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center space-x-2 text-gray-400 hover:text-white transition cursor-pointer">
+                    <!-- Library Header -->
+                    <div class="flex justify-between items-center px-2 py-2 mb-2">
+                        <div class="flex items-center space-x-2 text-[var(--text-muted)] hover:text-white transition cursor-pointer">
                             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/><path d="M16 11l-4-4-4 4"/><path d="M12 3v8"/></svg>
-                            <span class="font-bold">Your Library</span>
+                            <span class="font-bold text-base">Your Library</span>
                         </div>
-                        <div class="flex items-center space-x-2 text-gray-400">
-                            <!-- Only + (Create) button remains --><button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                            </button>
-                        </div>
+                        <button title="Create Playlist" class="p-1 rounded-full text-[var(--text-muted)] hover:bg-[var(--hover-dark)] hover:text-white transition">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                        </button>
                     </div>
 
-                    <!-- Filter/Search Bar --><div class="flex justify-between items-center mb-4">
-                        <div class="flex space-x-2 text-xs font-semibold">
-                            <span class="card-bg px-3 py-1 rounded-full cursor-pointer hover:bg-zinc-700 transition duration-150">Playlists</span>
-                            <span class="card-bg px-3 py-1 rounded-full cursor-pointer hover:bg-zinc-700 transition duration-150">Artists</span>
-                        </div>
-                    </div>
-                    
-                    <!-- Content List (Empty) --><div class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                        <!-- User requested this list to be empty -->
+                    <!-- Library Items List -->
+                    <div class="space-y-0.5 flex-1 overflow-y-auto custom-scrollbar">
+                        
+                        <!-- Liked Songs (Fixed Item) -->
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <div class="w-12 h-12 bg-gradient-to-br from-blue-700 to-purple-500 flex items-center justify-center rounded-lg shadow-lg">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                            </div>
+                            <div>
+                                <p class="text-sm font-semibold text-white">Liked Songs</p>
+                                <p class="text-xs text-[var(--text-muted)]">Playlist • 1,234 songs</p>
+                            </div>
+                        </a>
+                        
+                        <!-- Example Playlist 1 -->
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/1DB954/000?text=Workout" onerror="this.src='https://placehold.co/48x48/1DB954/000?text=Workout';" class="w-12 h-12 rounded-lg object-cover shadow-md" alt="Playlist Cover">
+                            <div>
+                                <p class="text-sm font-semibold text-white">Heavy Lifts</p>
+                                <p class="text-xs text-[var(--text-muted)]">Playlist • Sotam</p>
+                            </div>
+                        </a>
+                        
+                        <!-- Example Artist -->
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/F2D396/111?text=Ogryzek" onerror="this.src='https://placehold.co/48x48/F2D396/111?text=Ogryzek';" class="w-12 h-12 rounded-full object-cover shadow-md" alt="Artist Profile">
+                            <div>
+                                <p class="text-sm font-semibold text-white">Ogryzek</p>
+                                <p class="text-xs text-[var(--text-muted)]">Artist</p>
+                            </div>
+                        </a>
+                        
+                        <!-- Example Podcast -->
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/6A5ACD/000?text=Podcast" onerror="this.src='https://placehold.co/48x48/6A5ACD/000?text=Podcast';" class="w-12 h-12 rounded-lg object-cover shadow-md" alt="Podcast Cover">
+                            <div>
+                                <p class="text-sm font-semibold text-white">The Tech Crunch</p>
+                                <p class="text-xs text-[var(--text-muted)]">Podcast</p>
+                            </div>
+                        </a>
+                        
+                        <!-- More Placeholder Items -->
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/40E0D0/000?text=Chill" onerror="this.src='https://placehold.co/48x48/40E0D0/000?text=Chill';" class="w-12 h-12 rounded-lg object-cover shadow-md" alt="Playlist Cover">
+                            <div>
+                                <p class="text-sm font-semibold text-white">Chill Lofi Mix</p>
+                                <p class="text-xs text-[var(--text-muted)]">Playlist • Spotify</p>
+                            </div>
+                        </a>
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/FF6347/000?text=EDM" onerror="this.src='https://placehold.co/48x48/FF6347/000?text=EDM';" class="w-12 h-12 rounded-lg object-cover shadow-md" alt="Playlist Cover">
+                            <div>
+                                <p class="text-sm font-semibold text-white">Ultimate EDM 2024</p>
+                                <p class="text-xs text-[var(--text-muted)]">Playlist • Spotify</p>
+                            </div>
+                        </a>
+                        <a href="#" class="flex items-center space-x-2 p-2 rounded-md transition duration-150 hover:bg-[var(--hover-dark)]">
+                            <img src="https://placehold.co/48x48/DAA520/000?text=Jazz" onerror="this.src='https://placehold.co/48x48/DAA520/000?text=Jazz';" class="w-12 h-12 rounded-lg object-cover shadow-md" alt="Playlist Cover">
+                            <div>
+                                <p class="text-sm font-semibold text-white">Late Night Jazz</p>
+                                <p class="text-xs text-[var(--text-muted)]">Playlist • Spotify</p>
+                            </div>
+                        </a>
+
                     </div>
                 </div>
             </aside>
             
-            <!-- MAIN CONTENT VIEW CONTAINER --><main class="main-content flex-1 overflow-y-auto custom-scrollbar">
+            <!-- MAIN CONTENT VIEW CONTAINER --><main class="main-content flex-1 overflow-y-auto custom-scrollbar rounded-lg">
                 
-                <!-- Fixed Header/Top Bar with Glassmorphism Effect --><header class="glass-header sticky top-0 z-20 p-4 flex justify-between items-center">
+                <!-- Fixed Header/Top Bar --><header class="sticky-header sticky top-0 z-20 p-4 flex justify-between items-center transition-all duration-300">
                     <div class="flex items-center space-x-3">
-                        <!-- Navigation Arrows (Used for history/view switching) --><div class="flex space-x-2">
-                            <button id="back-button" class="bg-black/50 p-1 rounded-full text-gray-400 cursor-not-allowed hover:bg-black transition">
+                        <!-- Navigation Arrows -->
+                        <div class="flex space-x-2">
+                            <button id="back-button" class="bg-black/70 p-1.5 rounded-full text-gray-400 cursor-not-allowed hover:bg-black/80 transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                             </button>
-                            <button class="bg-black/50 p-1 rounded-full text-white hover:bg-black transition">
+                            <button class="bg-black/70 p-1.5 rounded-full text-white hover:bg-black/80 transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                             </button>
                         </div>
-                        
-                        <!-- Search/Quick Access (Hidden on mobile) --><div class="relative hidden md:block">
-                            <input type="text" placeholder="What do you want to play?" class="bg-zinc-800 text-sm py-2 pl-10 pr-4 rounded-full w-96 focus:outline-none focus:ring-2 focus:ring-[var(--accent-green)] transition">
-                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                        </div>
                     </div>
 
-                    <div class="flex items-center space-x-4 text-sm font-semibold">
-                        <!-- Profile icon --><div class="w-9 h-9 rounded-full bg-zinc-600 flex items-center justify-center font-bold text-xs cursor-pointer ring-2 ring-transparent hover:ring-[var(--accent-green)] transition duration-200">
-                            P
+                    <div class="relative flex items-center space-x-4 text-sm font-semibold">
+                        <!-- Profile/Auth Area -->
+                        <button id="profile-button" class="flex items-center space-x-2 p-1.5 rounded-full bg-black/70 hover:bg-black/80 transition relative">
+                            <!-- Profile icon (Dynamically populated with initials) -->
+                            <div id="profile-initials" class="w-8 h-8 rounded-full bg-zinc-600 flex items-center justify-center font-bold text-sm">
+                                <!-- Initials here -->
+                            </div>
+                            <span id="profile-name" class="font-bold text-sm pr-2 hidden sm:block">Log In</span>
+                        </button>
+                        
+                        <!-- Logout Dropdown (Initially Hidden) -->
+                        <div id="logout-dropdown" class="absolute right-0 top-12 w-48 bg-[#282828] rounded-md shadow-2xl overflow-hidden hidden">
+                            <button id="logout-btn" class="w-full text-left px-4 py-2 text-white hover:bg-[#3e3e3e] transition">
+                                Log out
+                            </button>
                         </div>
                     </div>
                 </header>
                 
-                <!-- --- VIEW 1: HOME DASHBOARD --- --><div id="home-view" class="p-6">
+                <!-- --- VIEW 1: HOME DASHBOARD --- --><div id="home-view" class="p-4 md:p-6 pb-20">
                     
-                    <!-- Quick Filters --><div class="flex space-x-3 mb-6">
-                        <span class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer shadow-lg hover:bg-gray-200 transition">All</span>
-                        <span class="card-bg text-white px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer hover:bg-zinc-700 transition">Music</span>
-                        <span class="card-bg text-white px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer hover:bg-zinc-700 transition">Podcasts</span>
-                    </div>
-
-                    <!-- Jump Back In Section (Large Cards) --><div class="mb-8">
-                        <h2 class="text-2xl font-bold mb-4">Jump Back In</h2>
-                        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            <!-- Card 1: This is Ogryzek (Clickable to switch view) --><div id="ogryzek-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/000000/white?text=Artist" onerror="this.src='https://placehold.co/80x80/000000/white?text=Artist';" class="w-20 h-20 object-cover" alt="Artist Image">
-                                <span class="font-bold text-base whitespace-nowrap overflow-hidden text-ellipsis">This is Ogryzek</span>
+                    <!-- Jump Back In Section (Large Cards) -->
+                    <div class="mb-10">
+                        <!-- Dynamic Greeting Text -->
+                        <h2 id="greeting-text" class="text-3xl font-extrabold mb-6"></h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                            
+                            <!-- Card 1: This is Ogryzek (Clickable to switch view) -->
+                            <div id="ogryzek-card" class="card-bg flex items-center space-x-3 rounded-md overflow-hidden transition duration-300 hover:bg-[var(--hover-dark)] cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/000000/F2D396?text=Artist" onerror="this.src='https://placehold.co/80x80/000000/F2D396?text=Artist';" class="w-20 h-20 object-cover" alt="Artist Image">
+                                <span class="font-bold text-base whitespace-nowrap overflow-hidden text-ellipsis flex-1 pr-16">This is Ogryzek</span>
                                 <!-- Modernized Play Button -->
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-0 mr-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                 </button>
                             </div>
                             
-                            <!-- Card 2: Liked Songs --><div id="liked-songs-main-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <div class="w-20 h-20 bg-[var(--accent-purple)] flex items-center justify-center">
+                            <!-- Card 2: Daily Mix 1 -->
+                            <div class="card-bg flex items-center space-x-3 rounded-md overflow-hidden transition duration-300 hover:bg-[var(--hover-dark)] cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/808080/000?text=MIX+1" onerror="this.src='https://placehold.co/80x80/808080/000?text=MIX+1';" class="w-20 h-20 object-cover" alt="Daily Mix 1">
+                                <span class="font-bold text-base whitespace-nowrap overflow-hidden text-ellipsis flex-1 pr-16">Daily Mix 1</span>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-0 mr-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Card 3: Liked Songs -->
+                            <div id="liked-songs-main-card" class="card-bg flex items-center space-x-3 rounded-md overflow-hidden transition duration-300 hover:bg-[var(--hover-dark)] cursor-pointer group shadow-lg">
+                                <div class="w-20 h-20 bg-gradient-to-br from-blue-700 to-purple-500 flex items-center justify-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                                 </div>
-                                <span class="font-bold text-base">Liked Songs</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <span class="font-bold text-base flex-1 pr-16">Liked Songs</span>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-0 mr-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                 </button>
                             </div>
                             
-                            <!-- Remaining cards removed in previous step -->
-
+                            <!-- Card 4: Release Radar -->
+                            <div class="card-bg flex items-center space-x-3 rounded-md overflow-hidden transition duration-300 hover:bg-[var(--hover-dark)] cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/008080/000?text=RADAR" onerror="this.src='https://placehold.co/80x80/008080/000?text=RADAR';" class="w-20 h-20 object-cover" alt="Release Radar">
+                                <span class="font-bold text-base flex-1 pr-16">Release Radar</span>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-0 mr-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Made For You Section REMOVED -->
-                    <!-- The section "Made For Sotam Chompa" has been removed as requested -->
+                    <!-- Made For You Section (Vertical Cards) -->
+                    <div class="mb-10">
+                        <h2 class="text-2xl font-bold mb-4 hover:underline cursor-pointer">Made For You</h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-6">
+                            
+                            <!-- Release Card 1 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/191414/1DB954?text=Daily+Mix+2" onerror="this.src='https://placehold.co/150x150/191414/1DB954?text=Daily+Mix+2';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Album Art">
+                                <h3 class="font-bold text-base truncate">Daily Mix 2</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">R&B, Soul, Pop, and more</p>
+
+                                <!-- Card Play Button -->
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Release Card 2 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/50C878/000?text=Weekly+Disc" onerror="this.src='https://placehold.co/150x150/50C878/000?text=Weekly+Disc';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Album Art">
+                                <h3 class="font-bold text-base truncate">Discover Weekly</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">Your weekly mixtape of fresh music.</p>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Release Card 3 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/CD5C5C/000?text=Today's+Top" onerror="this.src='https://placehold.co/150x150/CD5C5C/000?text=Today\'s+Top';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Podcast Art">
+                                <h3 class="font-bold text-base truncate">Today's Top Hits</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">The biggest songs right now.</p>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Release Card 4 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/808080/000?text=Mood+Booster" onerror="this.src='https://placehold.co/150x150/808080/000?text=Mood+Booster';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Daily Mix">
+                                <h3 class="font-bold text-base truncate">Mood Booster</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">Happy songs to brighten your day.</p>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Charts Section (Vertical Cards) -->
+                    <div class="mb-10">
+                        <h2 class="text-2xl font-bold mb-4 hover:underline cursor-pointer">Charts</h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-6">
+                            
+                            <!-- Chart Card 1 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/F0F8FF/000?text=Viral" onerror="this.src='https://placehold.co/150x150/F0F8FF/000?text=Viral';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Global Viral">
+                                <h3 class="font-bold text-base truncate">Global Viral 50</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">All the most shared hits worldwide.</p>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+
+                            <!-- Chart Card 2 -->
+                            <div class="release-card card-bg p-4 rounded-lg shadow-lg cursor-pointer relative group">
+                                <img src="https://placehold.co/150x150/8A2BE2/000?text=Top+50" onerror="this.src='https://placehold.co/150x150/8A2BE2/000?text=Top+50';" class="w-full aspect-square rounded-md mb-3 shadow-xl" alt="Top 50">
+                                <h3 class="font-bold text-base truncate">Top 50 - Global</h3>
+                                <p class="text-xs text-[var(--text-muted)] truncate">The world's most popular songs.</p>
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl absolute right-6 top-28 opacity-0 group-hover:opacity-100 transition duration-300 translate-y-2 group-hover:translate-y-0">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
                 </div>
 
-                <!-- --- VIEW 2: PLAYLIST DETAIL (OGRYZEK) --- --><div id="playlist-detail-view" class="hidden">
-                    <!-- Playlist Detail Header with Gradient BG (Sticky to get effect) --><div id="ogryzek-playlist-detail" class="ogryzek-header-gradient px-6 pt-20 pb-8 sticky top-0 z-10">
-                        <div class="flex items-end space-x-6">
-                            <!-- Album Art --><img src="https://placehold.co/250x250/F2D396/111?text=THIS+IS+OGRYZEK" onerror="this.src='https://placehold.co/250x250/F2D396/111?text=THIS+IS+OGRYZEK';" class="w-64 h-64 shadow-2xl rounded-md" alt="Ogryzek Playlist Cover">
-                            <!-- Details --><div class="flex flex-col">
-                                <p class="text-xs font-semibold text-white/90 uppercase">Public Playlist</p>
-                                <h1 class="text-7xl font-extrabold my-2">This Is Ogryzek</h1>
-                                <p class="text-sm text-white/70">This is Ogryzek. The essential tracks, all in one playlist.</p>
+                <!-- --- VIEW 2: PLAYLIST DETAIL (OGRYZEK) --- --><div id="playlist-detail-view" class="hidden pb-20">
+                    <!-- Playlist Detail Header with Gradient BG -->
+                    <div id="ogryzek-playlist-detail" class="ogryzek-header-gradient px-6 pt-20 pb-8 sticky top-0 z-10 transition-all duration-300">
+                        <div class="flex flex-col md:flex-row items-end space-x-0 md:space-x-6">
+                            <!-- Album Art -->
+                            <img src="https://placehold.co/250x250/F2D396/111?text=OGRYZEK" onerror="this.src='https://placehold.co/250x250/F2D396/111?text=OGRYZEK';" class="w-48 h-48 md:w-64 md:h-64 shadow-2xl rounded-md mb-4 md:mb-0" alt="Ogryzek Playlist Cover">
+                            <!-- Details -->
+                            <div class="flex flex-col justify-end w-full">
+                                <p class="text-sm font-semibold text-white/90 uppercase">Playlist</p>
+                                <h1 class="text-4xl md:text-7xl font-extrabold my-2">This Is Ogryzek</h1>
+                                <p class="text-sm text-white/70">The essential tracks, all in one playlist.</p>
                                 <p class="text-xs text-white/50 mt-2">
                                     <span class="text-white font-semibold">Spotify</span> • 9,820 saves • 50 songs, about 1 hr 30 min
                                 </p>
@@ -224,70 +560,61 @@
                         </div>
                     </div>
                     
-                    <!-- Playlist Controls and Track List --><div class="p-6 bg-[var(--bg-dark-main)]">
-                        <!-- Controls Row --><div class="flex items-center space-x-6 mb-8">
-                            <!-- Green Play Button --><button class="play-button w-14 h-14 rounded-full bg-[var(--accent-green)] flex items-center justify-center shadow-lg hover:scale-105 transition">
+                    <!-- Playlist Controls and Track List -->
+                    <div class="p-4 md:p-6 bg-[var(--bg-dark-main)] min-h-[calc(100vh-200px)]">
+                        <!-- Controls Row -->
+                        <div class="flex items-center space-x-6 mb-8">
+                            <!-- Green Play Button -->
+                            <button class="play-button w-14 h-14 rounded-full bg-[var(--accent-green)] flex items-center justify-center shadow-lg hover:scale-105 transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                             </button>
-                            <!-- Secondary Icons --><button title="Shuffle" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M4 20l7-7"/><path d="M21 16l-7 7"/><path d="M5 20h4"/></svg></button>
-                            <button title="Add to Library" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                            <!-- Secondary Icons -->
+                            <button title="Follow" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
                             <button title="More" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
                         </div>
                         
-                        <!-- Track List Table --><table class="w-full text-left table-auto">
-                            <thead>
-                                <tr class="text-gray-400 border-b border-zinc-700 uppercase text-xs tracking-wider">
-                                    <th class="py-2 w-10">#</th>
-                                    <th class="py-2">Title</th>
-                                    <th class="py-2 hidden sm:table-cell">Album</th>
-                                    <th class="py-2 hidden md:table-cell w-28">Date added</th>
-                                    <th class="py-2 w-16"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 3"/></svg></th>
+                        <!-- Track List Table -->
+                        <table class="w-full text-left table-auto">
+                            <!-- Sticky Header -->
+                            <thead class="sticky-track-header text-[var(--bg-dark-main)] bg-[var(--bg-dark-main)]">
+                                <tr class="text-[var(--text-muted)] border-b border-zinc-800 uppercase text-xs tracking-wider">
+                                    <th class="py-3 w-10">#</th>
+                                    <th class="py-3">Title</th>
+                                    <th class="py-3 hidden sm:table-cell">Album</th>
+                                    <th class="py-3 hidden md:table-cell w-36">Date added</th>
+                                    <th class="py-3 w-16"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 3"/></svg></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Track 1: MAIN CHARACTER --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
-                                    <td class="py-3 w-10">1</td>
-                                    <td class="py-3 flex items-center space-x-3">
-                                        <img src="https://placehold.co/40x40/2F4F4F/fff?text=MC" onerror="this.src='https://placehold.co/40x40/2F4F4F/fff?text=MC';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
-                                        <div>
+                                <!-- Track 1: MAIN CHARACTER -->
+                                <tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
+                                    <td class="py-2.5 w-10 text-[var(--text-muted)]">1</td>
+                                    <td class="py-2.5 flex items-center space-x-3">
+                                        <div class="hidden sm:block">
                                             <p class="font-semibold text-white">MAIN CHARACTER</p>
-                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
+                                            <p class="text-xs text-[var(--text-muted)] hover:text-white hover:underline">Ogryzek</p>
                                         </div>
                                     </td>
-                                    <td class="py-3 hidden sm:table-cell">MAIN CHARACTER</td>
-                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">A few days ago</td>
-                                    <td class="py-3 text-gray-400">1:38</td>
+                                    <td class="py-2.5 hidden sm:table-cell truncate">MAIN CHARACTER</td>
+                                    <td class="py-2.5 hidden md:table-cell text-[var(--text-muted)] text-xs">2024-11-20</td>
+                                    <td class="py-2.5 text-[var(--text-muted)] flex items-center space-x-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                                        <span>1:38</span>
+                                    </td>
                                 </tr>
-                                <!-- Track 2: GLORY --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
-                                    <td class="py-3 w-10">2</td>
-                                    <td class="py-3 flex items-center space-x-3">
-                                        <img src="https://placehold.co/40x40/B22222/fff?text=GLORY" onerror="this.src='https://placehold.co/40x40/B22222/fff?text=GLORY';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
-                                        <div>
+                                <!-- Track 2: GLORY -->
+                                <tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
+                                    <td class="py-2.5 w-10 text-[var(--text-muted)]">2</td>
+                                    <td class="py-2.5 flex items-center space-x-3">
+                                        <div class="hidden sm:block">
                                             <p class="font-semibold text-white">GLORY</p>
-                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
+                                            <p class="text-xs text-[var(--text-muted)] hover:text-white hover:underline">Ogryzek</p>
                                         </div>
                                     </td>
-                                    <td class="py-3 hidden sm:table-cell">GLORY</td>
-                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">2 weeks ago</td>
-                                    <td class="py-3 text-gray-400">2:29</td>
+                                    <td class="py-2.5 hidden sm:table-cell truncate">GLORY</td>
+                                    <td class="py-2.5 hidden md:table-cell text-[var(--text-muted)] text-xs">2024-11-05</td>
+                                    <td class="py-2.5 text-[var(--text-muted)]">2:29</td>
                                 </tr>
-                                <!-- Track 3: AURA --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
-                                    <td class="py-3 w-10">3</td>
-                                    <td class="py-3 flex items-center space-x-3">
-                                        <img src="https://placehold.co/40x40/1E90FF/fff?text=AURA" onerror="this.src='https://placehold.co/40x40/1E90FF/fff?text=AURA';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
-                                        <div>
-                                            <p class="font-semibold text-white">AURA</p>
-                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
-                                        </div>
-                                    </td>
-                                    <td class="py-3 hidden sm:table-cell">AURA</td>
-                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">1 month ago</td>
-                                    <td class="py-3 text-gray-400">1:55</td>
-                                </tr>
-                                <!-- More Tracks Placeholder -->
-                                <tr class="text-gray-400 text-sm"><td colspan="5" class="pt-8 pb-4">
-                                    <p>... and 47 more essential tracks by Ogryzek. </p>
-                                </td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -296,51 +623,60 @@
             </main>
         </div>
         
-        <!-- BOTTOM PLAYER BAR with Glassmorphism Effect --><footer class="glass-footer h-20 flex justify-between items-center px-4 md:px-6 shadow-2xl sticky bottom-0 z-30">
+        <!-- BOTTOM PLAYER BAR (Sticky) --><footer class="player-bar h-20 flex justify-between items-center px-4 md:px-6 shadow-2xl sticky bottom-0 z-30">
             
-            <!-- Left: Now Playing Info --><div class="flex items-center space-x-4 w-1/4">
+            <!-- Left: Now Playing Info (33%) --><div class="flex items-center space-x-4 w-1/4 min-w-[120px]">
                 <img src="https://placehold.co/60x60/800080/ffffff?text=NP" onerror="this.src='https://placehold.co/60x60/800080/ffffff?text=NP';" class="w-14 h-14 rounded-md object-cover shadow-lg" alt="Now Playing Art">
-                <div>
+                <div class="hidden md:block">
                     <p class="text-sm font-semibold truncate hover:underline cursor-pointer">LIKE ME</p>
-                    <p class="text-xs text-gray-400 truncate hover:text-white cursor-pointer">Ogryzek</p>
+                    <p class="text-xs text-[var(--text-muted)] truncate hover:text-white cursor-pointer">Ogryzek</p>
                 </div>
-                <!-- Heart Icon Button --><button class="text-gray-500 hover:text-green-500 transition duration-150">
+                <!-- Heart Icon Button -->
+                <button title="Save to Liked Songs" class="text-[var(--text-muted)] hover:text-[var(--accent-green)] transition duration-150 hidden sm:block">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                 </button>
             </div>
             
-            <!-- Center: Controls and Seek Bar --><div class="flex flex-col items-center justify-center w-1/2 max-w-xl">
-                <!-- Playback Controls --><div class="flex items-center space-x-6 mb-1">
-                    <button title="Shuffle" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20l7-7"/><path d="M21 16l-7 7"/><path d="M5 20h4"/></svg></button>
-                    <button title="Previous" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg></button>
+            <!-- Center: Controls and Seek Bar (50%) --><div class="flex flex-col items-center justify-center w-2/4 max-w-xl">
+                <!-- Playback Controls -->
+                <div class="flex items-center space-x-4 md:space-x-6 mb-1">
+                    <button title="Shuffle" class="text-[var(--text-muted)] hover:text-white transition hidden md:block"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20l7-7"/><path d="M21 16l-7 7"/><path d="M5 20h4"/></svg></button>
+                    <button title="Previous" class="text-[var(--text-muted)] hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg></button>
                     
-                    <!-- Main Play/Pause Button (White ring effect) --><button title="Play" class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black ring-2 ring-gray-600 hover:ring-white transition hover:scale-105">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <!-- Main Play/Pause Button -->
+                    <button title="Play" class="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black hover:scale-105 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     </button>
                     
-                    <button title="Next" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg></button>
-                    <button title="Repeat" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button>
+                    <button title="Next" class="text-[var(--text-muted)] hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg></button>
+                    <button title="Repeat" class="text-[var(--text-muted)] hover:text-white transition hidden md:block"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button>
                 </div>
                 
-                <!-- Seek Bar (Interactive look) --><div class="flex items-center space-x-2 w-full">
-                    <span class="text-xs text-gray-400">1:33</span>
-                    <div class="flex-1 h-1 bg-zinc-700 rounded-full group relative cursor-pointer">
-                        <!-- Progress line --><div class="h-full bg-white rounded-full w-1/3 group-hover:bg-[var(--accent-green)] transition-colors"></div>
-                        <!-- Current position knob (only visible on hover/touch) --><div class="absolute right-[66%] top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
+                <!-- Seek Bar (Interactive look) -->
+                <div class="flex items-center space-x-2 w-full">
+                    <span class="text-xs text-[var(--text-muted)]">1:33</span>
+                    <div class="flex-1 h-1 seek-bar-track rounded-full group relative cursor-pointer seek-bar-container">
+                        <!-- Progress line -->
+                        <div class="h-full seek-bar-progress rounded-full w-1/3 absolute left-0"></div>
+                        <!-- Current position knob (only visible on hover/touch) -->
+                        <div class="seek-bar-knob absolute right-[66%] top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md"></div>
                     </div>
-                    <span class="text-xs text-gray-400">3:50</span>
+                    <span class="text-xs text-[var(--text-muted)]">3:50</span>
                 </div>
             </div>
             
-            <!-- Right: Extra Controls (Lyrics, Queue, Volume) --><div class="flex items-center space-x-4 w-1/4 justify-end text-gray-400">
-                <button title="Lyrics" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><path d="M17 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M21 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg></button>
-                <button title="Queue" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></button>
+            <!-- Right: Extra Controls (33%) --><div class="flex items-center space-x-4 w-1/4 justify-end text-[var(--text-muted)] min-w-[120px]">
+                <button title="Lyrics" class="hover:text-white transition hidden lg:block"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><path d="M17 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M21 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg></button>
+                <button title="Queue" class="hover:text-white transition hidden sm:block"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 10c.87.5 1.5 1.57 1.5 2.5a3 3 0 1 1-6 0c0-.93.63-2 1.5-2.5"/><path d="M2 12h11"/><path d="M13 3v2"/></svg></button>
                 
-                <!-- Volume Control --><div class="flex items-center group w-24">
-                    <button title="Volume" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
-                    <div class="flex-1 h-1 bg-zinc-700 rounded-full group relative mx-2 cursor-pointer">
-                        <!-- Volume level --><div class="h-full bg-white rounded-full w-3/4 group-hover:bg-[var(--accent-green)] transition-colors"></div>
-                        <!-- Volume knob --><div class="absolute right-1/4 top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
+                <!-- Volume Control -->
+                <div class="flex items-center group w-24 hidden md:flex">
+                    <button title="Volume" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+                    <div class="flex-1 h-1 seek-bar-track rounded-full group relative mx-2 cursor-pointer seek-bar-container">
+                        <!-- Volume level -->
+                        <div class="h-full seek-bar-progress rounded-full w-3/4 absolute left-0"></div>
+                        <!-- Volume knob -->
+                        <div class="seek-bar-knob absolute right-1/4 top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow-md"></div>
                     </div>
                 </div>
             </div>
@@ -348,13 +684,182 @@
     </div>
 
     <script>
-        // --- View Management ---
+        // --- Global State for Authentication ---
+        window.USER_STATE = {
+            isLoggedIn: false,
+            displayName: 'Log In',
+            userId: null,
+            authMode: 'login' // 'login' or 'signup'
+        };
+
+        // --- Utility Functions ---
+        
+        /**
+         * Gets the time-based greeting.
+         */
+        function getTimeGreeting() {
+            const hour = new Date().getHours();
+            if (hour < 12) return "Good morning";
+            if (hour < 18) return "Good afternoon";
+            return "Good evening";
+        }
+        
+        /**
+         * Shows the custom notification box.
+         * @param {string} message - The message to display.
+         */
+        function showNotification(message) {
+            const box = document.getElementById('notification-box');
+            const msg = document.getElementById('notification-message');
+            
+            clearTimeout(window.notificationTimeout);
+            
+            msg.textContent = message;
+            box.classList.add('opacity-100', 'translate-y-0');
+            box.classList.remove('opacity-0', '-translate-y-4');
+
+            window.notificationTimeout = setTimeout(() => {
+                box.classList.remove('opacity-100', 'translate-y-0');
+                box.classList.add('opacity-0', '-translate-y-4');
+            }, 3000);
+        }
+
+        // --- Auth Modal Control ---
+
+        function openAuthModal() {
+            document.getElementById('auth-modal').classList.remove('hidden');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('auth-modal').classList.add('hidden');
+            document.getElementById('auth-error').classList.add('hidden');
+        }
+
+        function toggleAuthMode() {
+            const title = document.getElementById('auth-title');
+            const submitBtn = document.getElementById('auth-submit-button');
+            const promptText = document.getElementById('auth-prompt-text');
+            document.getElementById('auth-error').classList.add('hidden'); // Clear error on toggle
+
+            if (window.USER_STATE.authMode === 'login') {
+                window.USER_STATE.authMode = 'signup';
+                title.textContent = 'Sign Up';
+                submitBtn.textContent = 'Sign Up';
+                promptText.innerHTML = "Already have an account? <button onclick='toggleAuthMode()' class='text-white font-bold hover:underline'>Log In</button>";
+            } else {
+                window.USER_STATE.authMode = 'login';
+                title.textContent = 'Log In';
+                submitBtn.textContent = 'Log In';
+                promptText.innerHTML = "Don't have an account? <button onclick='toggleAuthMode()' class='text-white font-bold hover:underline'>Sign Up</button>";
+            }
+        }
+        
+        // --- Core Auth Logic ---
+
+        async function handleAuth(event) {
+            event.preventDefault();
+            
+            if (!window.auth) {
+                showNotification("Error: Firebase Auth not initialized.");
+                return;
+            }
+
+            const email = document.getElementById('auth-email').value;
+            const password = document.getElementById('auth-password').value;
+            const errorElement = document.getElementById('auth-error');
+            errorElement.classList.add('hidden');
+            
+            try {
+                if (window.USER_STATE.authMode === 'signup') {
+                    await window.createUserWithEmailAndPassword(window.auth, email, password);
+                    showNotification("Signup successful! You are now logged in.");
+                } else {
+                    await window.signInWithEmailAndPassword(window.auth, email, password);
+                    showNotification("Login successful! Welcome back.");
+                }
+                closeAuthModal();
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                errorElement.textContent = error.message.replace('Firebase: ', '').split('(')[0];
+                errorElement.classList.remove('hidden');
+            }
+        }
+        
+        async function handleLogout() {
+            try {
+                // Hide dropdown first
+                document.getElementById('logout-dropdown').classList.add('hidden');
+                
+                if (window.auth) {
+                    await window.signOut(window.auth);
+                    showNotification("Successfully logged out.");
+                } else {
+                    // Force UI update if Firebase wasn't fully ready
+                    window.USER_STATE.isLoggedIn = false;
+                    window.USER_STATE.displayName = 'Log In';
+                    window.updateAuthUI();
+                    showNotification("Successfully logged out (Local).");
+                }
+
+            } catch (error) {
+                showNotification(`Logout failed: ${error.message}`);
+                console.error("Logout error:", error);
+            }
+        }
+
+        // --- UI Update (Crucial for Auth State) ---
+        
+        /**
+         * Updates the header UI elements based on the global USER_STATE.
+         */
+        window.updateAuthUI = function() {
+            const profileInitials = document.getElementById('profile-initials');
+            const profileName = document.getElementById('profile-name');
+            const greetingElement = document.getElementById('greeting-text');
+            const profileButton = document.getElementById('profile-button');
+            const logoutDropdown = document.getElementById('logout-dropdown');
+            
+            // 1. Update Profile Button Text/Initials
+            if (window.USER_STATE.isLoggedIn) {
+                const name = window.USER_STATE.displayName;
+                profileInitials.textContent = name.charAt(0).toUpperCase();
+                profileName.textContent = name;
+                profileName.classList.remove('text-[var(--text-muted)]');
+                profileName.classList.add('text-white');
+                profileButton.classList.add('cursor-pointer');
+                
+                // Show dropdown on click
+                profileButton.onclick = () => {
+                    logoutDropdown.classList.toggle('hidden');
+                };
+            } else {
+                profileInitials.textContent = 'G'; // Guest/Generic
+                profileName.textContent = 'Log In';
+                profileName.classList.add('text-[var(--text-muted)]');
+                profileName.classList.remove('text-white');
+                profileButton.classList.add('cursor-pointer');
+                
+                // Open modal on click
+                profileButton.onclick = openAuthModal;
+                logoutDropdown.classList.add('hidden');
+            }
+            
+            // 2. Update Home Greeting
+            if (greetingElement) {
+                const name = window.USER_STATE.isLoggedIn ? window.USER_STATE.displayName : 'Music Lover';
+                greetingElement.textContent = `${getTimeGreeting()}, ${name}`;
+            }
+        }
+
+        // --- View Management and Initial Setup ---
+
         const views = {
             home: document.getElementById('home-view'),
             playlistDetail: document.getElementById('playlist-detail-view')
         };
         const mainContent = document.querySelector('.main-content');
         const backButton = document.getElementById('back-button');
+        const header = document.querySelector('.sticky-header');
 
         /**
          * Switches the main content view.
@@ -373,86 +878,102 @@
                 
                 // Update back button state
                 if (viewName === 'playlistDetail') {
+                    updateHeaderColor(true); 
                     backButton.classList.remove('cursor-not-allowed', 'text-gray-400');
-                    backButton.classList.add('cursor-pointer', 'text-white');
+                    backButton.classList.add('cursor-pointer', 'text-white', 'hover:bg-black/80');
                     backButton.onclick = () => switchView('home');
                 } else { // 'home' view
+                    updateHeaderColor(false);
                     backButton.classList.add('cursor-not-allowed', 'text-gray-400');
-                    backButton.classList.remove('cursor-pointer', 'text-white');
+                    backButton.classList.remove('cursor-pointer', 'text-white', 'hover:bg-black/80');
                     backButton.onclick = null;
                 }
             }
         }
         
-        // --- Notification Functionality ---
-        function showNotification(message) {
-            const box = document.getElementById('notification-box');
-            const msg = document.getElementById('notification-message');
-            
-            // Clear any existing timeout
-            clearTimeout(window.notificationTimeout);
-            
-            // Set message and show the box
-            msg.textContent = message;
-            box.classList.add('opacity-100', 'translate-y-0');
-            box.classList.remove('opacity-0', '-translate-y-4');
-
-            // Hide the box after 3 seconds
-            window.notificationTimeout = setTimeout(() => {
-                box.classList.remove('opacity-100', 'translate-y-0');
-                box.classList.add('opacity-0', '-translate-y-4');
-            }, 3000);
+        // --- Header Background Scroll Logic (Mimicking Spotify) ---
+        const HOME_SCROLL_THRESHOLD = 300; 
+        
+        function updateHeaderColor(isPlaylist) {
+            if (isPlaylist) {
+                header.style.backgroundColor = 'rgba(18, 18, 18, 0.85)';
+            } else {
+                const scrollTop = mainContent.scrollTop;
+                if (scrollTop > HOME_SCROLL_THRESHOLD) {
+                    header.style.backgroundColor = 'var(--bg-dark-main)';
+                } else {
+                    header.style.backgroundColor = 'rgba(18, 18, 18, 0)'; 
+                }
+            }
         }
+        
+        mainContent.addEventListener('scroll', () => {
+            if (!views.home.classList.contains('hidden')) {
+                updateHeaderColor(false);
+            }
+        });
+
 
         document.addEventListener('DOMContentLoaded', () => {
-            // 1. Initial setup: Ensure we start on the home view
+            // 1. Initial view setup: Start on the home view
             switchView('home');
             
-            // 2. Set up navigation clicks
+            // 2. Set up initial UI state (will be overridden by onAuthStateChanged once Firebase loads)
+            window.updateAuthUI();
+            
+            // 3. Set up Logout button listener
+            document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+            // 4. Set up navigation clicks
             document.getElementById('nav-home').addEventListener('click', (e) => {
                 e.preventDefault();
                 switchView('home');
             });
             
-            // 3. Handle the 'This is Ogryzek' card click to switch to the detail view
+            // 5. Handle the 'This is Ogryzek' card click to switch to the detail view
             const ogryzekCard = document.getElementById('ogryzek-card');
             if (ogryzekCard) {
                 ogryzekCard.addEventListener('click', (e) => {
-                    // Prevent navigation if the play button was clicked directly
                     if (e.target.closest('.play-button')) return;
                     switchView('playlistDetail');
                 });
             }
 
 
-            // Placeholder click handlers for general elements
+            // 6. Placeholder click handlers for general elements
             document.querySelectorAll('.play-button').forEach(button => {
                 button.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent card click
-                    const parent = e.currentTarget.closest('.group') || e.currentTarget.closest('.flex-col');
-                    const titleElement = parent ? parent.querySelector('.font-bold') : null;
-                    const title = titleElement ? titleElement.textContent.trim() : 'Track';
+                    e.stopPropagation();
+                    const parentCard = e.currentTarget.closest('.group');
+                    let title = 'Track';
+                    if (parentCard) {
+                        const titleElement = parentCard.querySelector('.font-bold');
+                        if (titleElement) {
+                             title = titleElement.textContent.trim();
+                        }
+                    } else if (e.currentTarget.title === 'Play') {
+                        title = 'Current Track';
+                    } else if (e.currentTarget.closest('#playlist-detail-view')) {
+                         title = 'This Is Ogryzek';
+                    }
+
                     showNotification(`Playing: ${title}`);
                 });
             });
 
-            document.querySelectorAll('.card-bg').forEach(card => {
+            document.querySelectorAll('.release-card').forEach(card => {
                 card.addEventListener('click', (e) => {
-                    // Prevent navigation if the play button was clicked directly
-                    if (e.target.closest('.play-button') || e.currentTarget.id === 'ogryzek-card' || e.currentTarget.id === 'liked-songs-main-card') return;
-                    
-                    const titleElement = card.querySelector('.font-bold');
-                    const title = titleElement ? titleElement.textContent.trim() : 'Item';
-                    showNotification(`Browsing details for: ${title}`);
+                    if (!e.target.closest('.play-button')) {
+                        const title = card.querySelector('.font-bold').textContent.trim();
+                        showNotification(`Mapsd to detail for: ${title} (Placeholder)`);
+                    }
                 });
             });
-
-            // Example of a control button handler
-            document.querySelector('[title="Play"]').addEventListener('click', () => {
-                showNotification("Toggled Play/Pause!");
+            
+            document.getElementById('liked-songs-main-card').addEventListener('click', () => {
+                showNotification("You navigated to Liked Songs (Placeholder)");
             });
             
-            // Track row click handler (Play Track)
             document.querySelectorAll('.track-row').forEach(row => {
                 row.addEventListener('click', (e) => {
                     const title = row.querySelector('.font-semibold').textContent;
@@ -460,11 +981,22 @@
                 });
             });
             
-            // Handle Liked Songs card click
-            document.getElementById('liked-songs-main-card').addEventListener('click', () => {
-                showNotification("You navigated to Liked Songs (Placeholder)");
+            // Close dropdown/modal on outside click
+            document.addEventListener('click', (e) => {
+                const profileButton = document.getElementById('profile-button');
+                const logoutDropdown = document.getElementById('logout-dropdown');
+                const authModal = document.getElementById('auth-modal');
+                
+                // Close dropdown if clicked outside profile area
+                if (!profileButton.contains(e.target) && !logoutDropdown.contains(e.target)) {
+                    logoutDropdown.classList.add('hidden');
+                }
+                
+                // Close modal if clicked on backdrop
+                if (e.target === authModal) {
+                    closeAuthModal();
+                }
             });
-
         });
     </script>
 </body>
