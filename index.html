@@ -1,839 +1,394 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Music Wave</title>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <meta name="description" content="Music Wave - a modern music web UI inspired by popular streaming apps." />
-</head>
-<body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="logo">Music Wave</div>
-      <nav class="nav">
-        <a class="nav-item active" id="nav-home">Home</a>
-        <a class="nav-item">Your Library</a>
-      </nav>
-      <div class="playlists">
-        <h4>Your Playlists</h4>
-        <ul id="playlist-list"></ul>
-      </div>
-    </aside>
-
-    <main class="main">
-      <header class="topbar">
-            <div class="search">
-              <input id="search" placeholder="Search for artists, songs, or podcasts" />
-            </div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <div class="user" id="user-btn">Guest</div>
-            </div>
-      </header>
-
-      <!-- Home view -->
-      <section id="home-view" class="content view">
-        <h2>Made for you</h2>
-        <div id="grid" class="grid"></div>
-      </section>
-
-      <!-- Search view (hidden by default) -->
-      <section id="search-view" class="content view hidden">
-        <h2>Search Results</h2>
-        <input id="search-input" class="search-large" placeholder="Search songs, artists, albums" />
-        <div id="results" class="grid" style="margin-top:12px"></div>
-
-        <h2 style="margin-top:20px">Discover</h2>
-        <div id="discover" class="grid"></div>
-      </section>
-
-      <!-- Profile view -->
-      <section id="profile-view" class="content view hidden">
-        <div class="profile-header">
-          <div class="profile-avatar-wrap">
-            <img id="profile-avatar-img" class="profile-avatar" src="" alt="avatar">
-            <button id="profile-change-btn" class="profile-change-btn">Change photo</button>
-          </div>
-          <div class="profile-meta">
-            <div class="profile-role">Profile</div>
-            <h1 id="profile-display" class="profile-name">User</h1>
-            <div id="profile-stats" class="profile-stats">0 Followers • 0 Following</div>
-          </div>
-        </div>
-        <div style="margin-top:18px">
-          <h3>Top artists this month</h3>
-          <div id="profile-artists" class="grid" style="margin-top:12px"></div>
-        </div>
-        <input id="profile-avatar-input" type="file" accept="image/*" class="hidden" />
-      </section>
-
-    </main>
-  </div>
-
-  <!-- Auth modal (login / signup) -->
-  <div id="auth-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-content" role="dialog" aria-modal="true" aria-label="Authentication">
-      <button class="close" id="auth-close">✕</button>
-      <div class="auth-tabs">
-        <button id="tab-login" class="active">Login</button>
-        <button id="tab-signup">Sign up</button>
-      </div>
-
-      <div id="auth-login" class="auth-panel">
-        <input id="login-username" placeholder="Username" />
-        <input id="login-password" type="password" placeholder="Password" />
-        <div id="login-error" class="auth-error"></div>
-        <button id="login-btn">Login</button>
-      </div>
-
-      <div id="auth-signup" class="auth-panel hidden">
-        <input id="signup-username" placeholder="Username" />
-        <input id="signup-display" placeholder="Display name (optional)" />
-        <input id="signup-password" type="password" placeholder="Password" />
-        <input id="signup-password2" type="password" placeholder="Confirm password" />
-        <input id="signup-avatar" type="file" accept="image/*" />
-        <div id="signup-error" class="auth-error"></div>
-        <button id="signup-btn">Create account</button>
-      </div>
-    </div>
-
-      <!-- Playlist modal (create new playlist) -->
-      <div id="playlist-modal" class="modal hidden" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-label="Create playlist">
-          <button class="close" id="playlist-close">✕</button>
-          <h3 style="margin:0 0 8px 0">Create playlist</h3>
-          <input id="playlist-name-input" placeholder="Playlist name" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;box-sizing:border-box" />
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-            <button id="playlist-cancel" style="padding:8px 12px;border-radius:8px;background:transparent;border:0;cursor:pointer">Cancel</button>
-            <button id="playlist-create" style="padding:8px 12px;border-radius:8px;background:var(--accent);color:white;border:0;cursor:pointer">Create</button>
-          </div>
-        </div>
-      </div>
-  </div>
-
-  <footer class="player">
-    <div class="player-left">
-      <div class="cover" id="cover" aria-hidden="true"></div>
-      <div class="track-info">
-        <div id="title">Not Playing</div>
-        <div id="artist">—</div>
-      </div>
-    </div>
-
-    <div class="player-center">
-      <div class="controls">
-        <button id="prev" title="Previous" aria-label="Previous track">⟲</button>
-        <button id="play" title="Play" aria-label="Play or pause">►</button>
-        <button id="next" title="Next" aria-label="Next track">⟲</button>
-      </div>
-
-      <div class="progress">
-        <span id="current-time">0:00</span>
-        <input type="range" id="progress" min="0" max="100" value="0">
-        <span id="duration">0:00</span>
-      </div>
-    </div>
-
-    <div class="player-right">
-      <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" title="Volume">
-    </div>
-  </footer>
-
-  <script>
-  // SPA + audio player implementation (inlined from app.js)
-  // --- Remote API configuration (optional) ---
-  // If you want to use your phone as a simple server (AWebServer), set
-  // `API_BASE` to the full base URL of your API, e.g. `http://192.168.0.12:8080/api`.
-  // Leave as `null` to keep using localStorage only.
-  // NOTE: Your phone server must return proper CORS headers (Access-Control-Allow-Origin: *).
-  // Read API_BASE from localStorage so it can be changed in-app.
-  const API_BASE = localStorage.getItem('mw_api_base') || null; // set via Settings (⚙)
-
-  async function remoteRequest(path, method = 'GET', body = null){
-    if (!API_BASE) throw new Error('No remote API configured');
-    const url = API_BASE.replace(/\/$/,'') + '/' + path.replace(/^\//,'');
-    const opts = { method, headers: {} };
-    if (body !== null){ opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-    const res = await fetch(url, opts);
-    if (!res.ok){ const t = await res.text(); throw new Error(t || res.statusText); }
-    // try to parse JSON, otherwise return text
-    const txt = await res.text();
-    try { return JSON.parse(txt); } catch(e){ return txt; }
-  }
-
-  async function remoteCreateUser(username, payload){
-    // POST /users  { username, payload }
-    return remoteRequest('users', 'POST', { username, ...payload });
-  }
-  async function remoteGetUser(username){
-    // GET /users/:username
-    return remoteRequest(`users/${encodeURIComponent(username)}`, 'GET');
-  }
-  async function remoteSaveUser(username, payload){
-    // PUT /users/:username
-    return remoteRequest(`users/${encodeURIComponent(username)}`, 'PUT', payload);
-  }
-
-  // Fetch remote tracks from API_BASE + '/tracks' and prepend to `tracks` list
-  async function fetchRemoteTracks(){
-    if (!API_BASE) return;
-    try{
-      const url = API_BASE.replace(/\/$/,'') + '/tracks';
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(res.statusText || 'Failed');
-      const data = await res.json();
-      if (!data || !Array.isArray(data.tracks)) return;
-      // build set of known urls to avoid duplicates
-      const known = new Set(tracks.map(t => t.url));
-      // add remote tracks (ensure absolute URL)
-      data.tracks.forEach(t=>{
-        let trackUrl = t.url || '';
-        if (trackUrl && trackUrl.startsWith('/')) trackUrl = API_BASE.replace(/\/$/,'') + trackUrl;
-        if (!trackUrl || known.has(trackUrl)) return;
-        known.add(trackUrl);
-        tracks.unshift({
-          id: t.filename || ('r_'+Date.now()),
-          title: t.title || t.filename,
-          artist: t.artist || '',
-          url: trackUrl,
-          color: t.color || 'hsl(200 40% 40%)',
-          remote: true // mark as remote if you want to style differently
-        });
-      });
-      renderGrid();
-    }catch(e){
-      console.warn('Failed to fetch remote tracks', e);
-    }
-  }
-
-  // Show a simple settings prompt to set API base and reload
-  function setApiBase(){
-    const current = localStorage.getItem('mw_api_base') || '';
-    const v = prompt('API base URL (include http:// and path), e.g. http://192.168.31.192:8080/mysqladmin', current);
-    if (v === null) return;
-    const val = v.trim();
-    if (val) localStorage.setItem('mw_api_base', val); else localStorage.removeItem('mw_api_base');
-    alert('Saved. The page will reload to apply the new API base.');
-    location.reload();
-  }
-
-  const tracks = [];
-  // sample public MP3s (royalty-free/public sample files). You can replace these with your own URLs.
-  const sampleUrls = [
-    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_700KB.mp3',
-    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_1MG.mp3',
-    'https://file-examples.com/wp-content/uploads/2017/11/file_example_MP3_2MG.mp3'
-  ];
-  for (let i=1;i<=12;i++){
-    tracks.push({
-      id:i,
-      title:`Song ${i}`,
-      artist:`Artist ${((i-1)%6)+1}`,
-      color: `hsl(${(i*35)%360} 60% 50%)`,
-      url: sampleUrls[i % sampleUrls.length]
-    });
-  }
-
-  // State
-  let currentIndex = -1;
-
-  // Elements
-  const el = id => document.getElementById(id);
-  const grid = el('grid');
-  const cover = el('cover');
-  const titleEl = el('title');
-  const artistEl = el('artist');
-  const durationEl = el('duration');
-  const currentTimeEl = el('current-time');
-  const progressEl = el('progress');
-  const playBtn = el('play');
-  const prevBtn = el('prev');
-  const nextBtn = el('next');
-  const volumeEl = el('volume');
-  const audio = document.createElement('audio');
-  audio.id = 'audio';
-  audio.preload = 'metadata';
-  document.body.appendChild(audio);
-
-  // Views
-  const homeView = el('home-view');
-  const searchView = el('search-view');
-  const searchInput = el('search-input') || null; // search view input
-  const topSearch = el('search'); // topbar input
-  const resultsEl = el('results');
-  const discoverEl = el('discover');
-
-  function fmt(s){
-    s = Math.max(0,Math.floor(s));
-    return Math.floor(s/60)+":"+String(s%60).padStart(2,'0');
-  }
-
-  function renderGrid(){
-    grid.innerHTML='';
-    tracks.forEach((t,idx)=>{
-      const card = document.createElement('div');
-      card.className='card';
-      card.onclick = ()=> setCurrent(idx);
-      const art = document.createElement('div'); art.className='art'; art.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
-      const meta = document.createElement('div'); meta.className='meta';
-      const title = document.createElement('div'); title.className='title'; title.textContent = t.title;
-      const sub = document.createElement('div'); sub.className='subtitle'; sub.textContent = t.artist;
-      meta.appendChild(title); meta.appendChild(sub);
-      card.appendChild(art); card.appendChild(meta);
-      grid.appendChild(card);
-    });
-  }
-
-  // playlists removed from UI; no-op placeholder if needed later
-  function renderPlaylists(){
-    let listEl = el('playlist-list');
-    if (!listEl){
-      const pcont = document.querySelector('.playlists');
-      if (!pcont) return;
-      listEl = document.createElement('ul'); listEl.id = 'playlist-list';
-      pcont.appendChild(listEl);
-    }
-    listEl.innerHTML = '';
-    const u = getCurrentUser();
-    if (!u){
-      listEl.innerHTML = `<li style="color:var(--muted);padding:6px">Sign in to see your playlists</li>`;
-      return;
-    }
-    const pls = (u.playlists && Array.isArray(u.playlists)) ? u.playlists : [];
-    if (pls.length === 0){
-      const empty = document.createElement('li');
-      empty.style.color = 'var(--muted)'; empty.style.padding = '6px';
-      empty.textContent = 'No playlists yet';
-      listEl.appendChild(empty);
-    } else {
-      pls.forEach((p)=>{
-        const li = document.createElement('li');
-        li.style.padding = '8px 6px';
-        li.style.display = 'flex'; li.style.justifyContent = 'space-between'; li.style.alignItems = 'center';
-        const left = document.createElement('div'); left.style.display='flex'; left.style.gap='8px'; left.style.alignItems='center';
-        const name = document.createElement('span'); name.textContent = p.title; name.style.cursor='pointer';
-        name.onclick = ()=>{
-          // show only playlist tracks in grid
-          const ids = (p.tracks||[]);
-          const filtered = tracks.filter(t=> ids.includes(t.id));
-          if (filtered.length) renderCards(grid, filtered); else alert('Playlist is empty');
-        };
-        left.appendChild(name);
-        const count = document.createElement('span'); count.textContent = `(${(p.tracks||[]).length})`; count.style.color='var(--muted)';
-        left.appendChild(count);
-        const right = document.createElement('div');
-        const addBtn = document.createElement('button'); addBtn.textContent = '+ add current'; addBtn.title='Add current track';
-        addBtn.style.border='0'; addBtn.style.background='transparent'; addBtn.style.color='var(--muted)'; addBtn.style.cursor='pointer';
-        addBtn.onclick = (e)=>{
-          e.stopPropagation();
-          if (currentIndex < 0){ alert('No track playing'); return; }
-          const users = loadUsers();
-          const curUser = localStorage.getItem('mw_current');
-          if (!curUser) return alert('Sign in first');
-          const found = users[curUser]; if (!found) return;
-          found.playlists = found.playlists || [];
-          const target = found.playlists.find(x=>x.id===p.id);
-          if (!target) return;
-          if (!target.tracks) target.tracks = [];
-          if (!target.tracks.includes(tracks[currentIndex].id)) target.tracks.push(tracks[currentIndex].id);
-          saveUsers(users);
-          // try to sync this user's data to remote server
-          syncCurrentUserToServer();
-          renderPlaylists();
-        };
-        const delBtn = document.createElement('button'); delBtn.textContent = '🗑'; delBtn.title='Delete playlist'; delBtn.style.border='0'; delBtn.style.background='transparent'; delBtn.style.color='var(--muted)'; delBtn.style.cursor='pointer';
-        delBtn.onclick = (e)=>{
-          e.stopPropagation(); if (!confirm('Delete playlist?')) return;
-          const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return;
-          const found = users[curUser]; if (!found) return;
-          found.playlists = (found.playlists||[]).filter(x=>x.id!==p.id);
-          saveUsers(users); syncCurrentUserToServer(); renderPlaylists();
-        };
-        right.appendChild(addBtn); right.appendChild(delBtn);
-        li.appendChild(left); li.appendChild(right);
-        listEl.appendChild(li);
-      });
-    }
-    // create new playlist button
-    const createLi = document.createElement('li'); createLi.style.padding='8px 6px';
-    const createBtn = document.createElement('button'); createBtn.textContent = '+ New Playlist'; createBtn.style.width='100%'; createBtn.style.border='0'; createBtn.style.background='transparent'; createBtn.style.color='var(--accent)'; createBtn.style.cursor='pointer';
-    createBtn.onclick = ()=>{ openPlaylistModal(); };
-    createLi.appendChild(createBtn); listEl.appendChild(createLi);
-  }
-
-  function updatePlayerUI(){
-    if (currentIndex<0){
-      cover.style.background = '';
-      titleEl.textContent = 'Not Playing';
-      artistEl.textContent = '—';
-      durationEl.textContent = '0:00';
-      progressEl.value = 0;
-      currentTimeEl.textContent = '0:00';
-      return;
-    }
-    const t = tracks[currentIndex];
-    cover.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
-    titleEl.textContent = t.title;
-    artistEl.textContent = t.artist;
-    durationEl.textContent = audio.duration ? fmt(audio.duration) : '0:00';
-    progressEl.max = Math.floor(audio.duration || 0);
-    progressEl.value = Math.floor(audio.currentTime || 0);
-    currentTimeEl.textContent = fmt(audio.currentTime || 0);
-  }
-
-  function setCurrent(idx){
-    if (idx<0 || idx>=tracks.length) return;
-    currentIndex = idx;
-    const t = tracks[currentIndex];
-    if (audio.src !== t.url) audio.src = t.url;
-    audio.play();
-    playBtn.textContent = '❚❚';
-    updatePlayerUI();
-  }
-
-  function togglePlay(){
-    if (audio.paused){
-      if (!audio.src && tracks.length) setCurrent(0);
-      else audio.play();
-      playBtn.textContent = '❚❚';
-    } else {
-      audio.pause();
-      playBtn.textContent = '►';
-    }
-  }
-
-  function next(){
-    if (currentIndex < 0) return setCurrent(0);
-    setCurrent((currentIndex+1) % tracks.length);
-  }
-
-  function prev(){
-    if (currentIndex < 0) return setCurrent(0);
-    setCurrent((currentIndex-1+tracks.length) % tracks.length);
-  }
-
-  // Audio events
-  audio.addEventListener('timeupdate', updatePlayerUI);
-  audio.addEventListener('loadedmetadata', updatePlayerUI);
-  audio.addEventListener('ended', next);
-
-  // toggle cover animation based on playback
-  audio.addEventListener('play', ()=>{ if (cover) cover.classList.add('playing'); });
-  audio.addEventListener('pause', ()=>{ if (cover) cover.classList.remove('playing'); });
-
-  playBtn.addEventListener('click', togglePlay);
-  nextBtn.addEventListener('click', next);
-  prevBtn.addEventListener('click', prev);
-
-  progressEl.addEventListener('input', (e)=>{
-    audio.currentTime = Number(e.target.value);
-    updatePlayerUI();
-  });
-
-  volumeEl.addEventListener('input', (e)=>{ audio.volume = Number(e.target.value); });
-
-  // Keyboard shortcuts: space = play/pause, left/right = seek, up/down = volume
-  document.addEventListener('keydown', (e)=>{
-    // ignore inputs
-    const tag = (document.activeElement && document.activeElement.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-    if (e.code === 'Space'){
-      e.preventDefault();
-      togglePlay();
-    } else if (e.code === 'ArrowRight'){
-      audio.currentTime = Math.min((audio.currentTime||0) + 5, audio.duration || Infinity);
-    } else if (e.code === 'ArrowLeft'){
-      audio.currentTime = Math.max((audio.currentTime||0) - 5, 0);
-    } else if (e.code === 'ArrowUp'){
-      audio.volume = Math.min(1, (audio.volume || 0.5) + 0.05);
-      if (volumeEl) volumeEl.value = audio.volume;
-    } else if (e.code === 'ArrowDown'){
-      audio.volume = Math.max(0, (audio.volume || 0.5) - 0.05);
-      if (volumeEl) volumeEl.value = audio.volume;
-    }
-  });
-
-  // Search & Discover
-  function renderCards(container, list){
-    container.innerHTML = '';
-    if (!list || list.length === 0){
-      container.innerHTML = `<div style="color:var(--muted);padding:8px">No results</div>`;
-      return;
-    }
-    list.forEach((t)=>{
-      const card = document.createElement('div');
-      card.className='card';
-      const art = document.createElement('div'); art.className='art'; art.style.background = `linear-gradient(135deg, ${t.color}, #222)`;
-      const meta = document.createElement('div'); meta.className='meta';
-      const title = document.createElement('div'); title.className='title'; title.textContent = t.title;
-      const sub = document.createElement('div'); sub.className='subtitle'; sub.textContent = t.artist;
-      meta.appendChild(title); meta.appendChild(sub);
-      card.appendChild(art); card.appendChild(meta);
-      card.onclick = ()=>{
-        const i = tracks.findIndex(x=>x.id===t.id);
-        setCurrent(i);
-        showView('home');
-      };
-      container.appendChild(card);
-    });
-  }
-
-  function doSearch(q){
-    q = (q||'').trim().toLowerCase();
-    if (!q) {
-      resultsEl.innerHTML = '<div style="color:var(--muted);padding:8px">Type to search songs or artists</div>';
-      return;
-    }
-    const out = tracks.filter(t=> t.title.toLowerCase().includes(q) || t.artist.toLowerCase().includes(q));
-    renderCards(resultsEl, out);
-  }
-
-  function renderDiscover(){
-    const sample = [];
-    for (let i=0;i<8;i++) sample.push(tracks[(i*3)%tracks.length]);
-    renderCards(discoverEl, sample);
-  }
-
-  // --- Profile rendering & avatar update ---
-  const profileView = el('profile-view');
-  const profileAvatarImg = el('profile-avatar-img');
-  const profileDisplayEl = el('profile-display');
-  const profileStats = el('profile-stats');
-  const profileArtists = el('profile-artists');
-  const profileAvatarInput = el('profile-avatar-input');
-  const profileChangeBtn = el('profile-change-btn');
-
-  function showProfile(){
-    const u = getCurrentUser();
-    if (!u) { openAuth(); return; }
-    // show profile view and hide others
-    homeView.classList.add('hidden'); searchView.classList.add('hidden'); if (profileView) profileView.classList.remove('hidden');
-    renderProfile();
-  }
-
-  function renderProfile(){
-    const u = getCurrentUser();
-    if (!u) return;
-    if (profileAvatarImg) profileAvatarImg.src = u.avatar || '';
-    if (profileDisplayEl) profileDisplayEl.textContent = u.display || u.username;
-    if (profileStats) profileStats.textContent = (u.followers||0) + ' Followers • ' + (u.following||0) + ' Following';
-    // show some sample artists (reuse discover logic)
-    if (profileArtists) renderCards(profileArtists, tracks.slice(0,8));
-  }
-
-  // change avatar flow
-  if (profileChangeBtn) profileChangeBtn.addEventListener('click', ()=>{ if (profileAvatarInput) profileAvatarInput.click(); });
-  if (profileAvatarInput) profileAvatarInput.addEventListener('change', async (e)=>{
-    const f = e.target.files && e.target.files[0]; if (!f) return;
-    try{
-      const dataUrl = await resizeImage(f, 256);
-      const users = loadUsers(); const cur = localStorage.getItem('mw_current'); if (!cur) return alert('Sign in first');
-      const found = users[cur]; if (!found) return;
-      found.avatar = dataUrl;
-      saveUsers(users);
-      try{ await syncCurrentUserToServer(); }catch(e){}
-      renderUserUI(); renderProfile();
-    }catch(err){ console.error('Avatar update failed', err); alert('Failed to update avatar'); }
-  });
-
-  // Router
-  function showView(name){
-    if (name === 'home'){
-      homeView.classList.remove('hidden'); searchView.classList.add('hidden');
-      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-      const h = document.getElementById('nav-home'); if (h) h.classList.add('active');
-    } else if (name === 'search'){
-      homeView.classList.add('hidden'); searchView.classList.remove('hidden');
-      document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-      const s = document.getElementById('nav-search'); if (s) s.classList.add('active');
-      if (searchInput) searchInput.focus();
-    }
-  }
-
-  // nav handlers
-  const navSearch = document.getElementById('nav-search'); if (navSearch) navSearch.addEventListener('click', ()=> showView('search'));
-  const navHome = document.getElementById('nav-home'); if (navHome) navHome.addEventListener('click', ()=> showView('home'));
-  if (topSearch){ topSearch.addEventListener('focus', ()=> showView('search')); topSearch.addEventListener('click', ()=> showView('search')); }
-
-  if (searchInput){ searchInput.addEventListener('input', (e)=> doSearch(e.target.value)); searchInput.addEventListener('keydown', (e)=>{ if (e.key==='Enter') doSearch(e.target.value); }); }
-
-  // --- Authentication (client-side, localStorage) ---
-  function readFileAsDataUrl(file){
-    return new Promise((resolve,reject)=>{
-      const fr = new FileReader();
-      fr.onload = ()=> resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-  }
-
-  // Resize image client-side to limit storage size and dimensions
-  function resizeImage(file, maxDim = 256){
-    return new Promise((resolve,reject)=>{
-      if (!file) return resolve(null);
-      const img = new Image();
-      const fr = new FileReader();
-      fr.onload = ()=>{
-        img.onload = ()=>{
-          const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
-          const w = Math.round(img.width * ratio);
-          const h = Math.round(img.height * ratio);
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.clearRect(0,0,w,h);
-          ctx.drawImage(img,0,0,w,h);
-          // default to jpeg to reduce size
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-          resolve(dataUrl);
-        };
-        img.onerror = (err)=> reject(err);
-        img.src = fr.result;
-      };
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    });
-  }
-
-  async function hashPassword(pw){
-    const enc = new TextEncoder().encode(pw);
-    const buf = await crypto.subtle.digest('SHA-256', enc);
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-  }
-
-  function loadUsers(){
-    try{return JSON.parse(localStorage.getItem('mw_users')||'{}')}catch(e){return {}};
-  }
-
-  function saveUsers(u){ localStorage.setItem('mw_users', JSON.stringify(u)); }
-
-  // When users are updated locally, attempt to sync the current user's record to the remote server (if configured).
-  async function syncCurrentUserToServer(){
-    if (!API_BASE) return;
-    const cur = localStorage.getItem('mw_current'); if (!cur) return;
-    const users = loadUsers(); if (!users[cur]) return;
-    try{
-      await remoteSaveUser(cur, users[cur]);
-    }catch(e){ console.warn('Failed to sync user to server:', e.message); }
-  }
-
-  async function createUser(username,password,display,avatarData){
-    const users = loadUsers();
-    if (users[username]) throw new Error('Username already exists');
-    const hash = await hashPassword(password);
-    const localRecord = { hash, display: display || username, avatar: avatarData || null, playlists: [] };
-    // If remote API configured, try creating remotely first, fall back to local
-    if (API_BASE){
-      try{
-        await remoteCreateUser(username, { hash, display: display || username, avatar: avatarData || null, playlists: [] });
-        // after remote created, also save locally for offline fallback
-        users[username] = localRecord; saveUsers(users);
-        localStorage.setItem('mw_current', username);
-        return users[username];
-      }catch(e){
-        console.warn('Remote create failed, falling back to local:', e.message);
-      }
-    }
-    users[username] = localRecord;
-    saveUsers(users);
-    localStorage.setItem('mw_current', username);
-    return users[username];
-  }
-
-  async function loginUser(username,password){
-    // Try remote login if API configured
-    if (API_BASE){
-      try{
-        // send username+pw (hashed client-side) or rely on server to verify
-        const hash = await hashPassword(password);
-        const remote = await remoteRequest('login', 'POST', { username, hash });
-        // remote should return user object on success
-        if (remote && remote.username){
-          // save locally as cache
-          const users = loadUsers();
-          users[username] = { hash: remote.hash || hash, display: remote.display || username, avatar: remote.avatar || null, playlists: remote.playlists || [] };
-          saveUsers(users);
-          localStorage.setItem('mw_current', username);
-          return users[username];
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Wave</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom colors and variables */
+        :root {
+            /* Deeper, richer dark colors */
+            --bg-dark-main: #0E0E10; /* Darker main background */
+            --bg-dark-card: #1C1C1E; /* Slightly lighter card/section background */
+            --bg-dark-sidebar: #07070A; /* Deepest black for sidebar */
+            --accent-green: #1ED760; /* Slightly brighter, more modern green */
+            --accent-purple: #9540FF; /* Vibrant purple */
         }
-      }catch(e){
-        console.warn('Remote login failed, falling back to local:', e.message);
-      }
-    }
-    const users = loadUsers();
-    if (!users[username]) throw new Error('No such user');
-    const hash = await hashPassword(password);
-    if (hash !== users[username].hash) throw new Error('Incorrect password');
-    localStorage.setItem('mw_current', username);
-    return users[username];
-  }
+        body {
+            background-color: black;
+            font-family: 'Inter', sans-serif;
+        }
+        .sidebar {
+            background-color: var(--bg-dark-sidebar);
+            /* Added a subtle shadow/border to detach it slightly */
+            border-right: 1px solid #1c1c1e; 
+        }
+        .main-content {
+            background-color: var(--bg-dark-main);
+        }
+        .card-bg {
+            background-color: var(--bg-dark-card);
+        }
 
-  function logoutUser(){ localStorage.removeItem('mw_current'); renderUserUI(); }
+        /* Glassmorphism for Header/Footer */
+        .glass-header {
+            background-color: rgba(14, 14, 16, 0.9); /* Opaque background */
+            backdrop-filter: blur(8px); /* Subtle blur effect */
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .glass-footer {
+            background-color: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-top: 1px solid #1c1c1e;
+        }
 
-  function getCurrentUser(){ const u = localStorage.getItem('mw_current'); if (!u) return null; const users = loadUsers(); return users[u] ? { username: u, ...users[u] } : null; }
+        /* Custom Scrollbar for better integration */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: #333; /* Darker thumb */
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background-color: transparent;
+        }
 
-  function renderUserUI(){
-    const userBtn = el('user-btn');
-    const u = getCurrentUser();
-    if (!userBtn) return;
-    if (!u){
-      userBtn.innerHTML = 'Guest';
-      userBtn.title = 'Login or sign up';
-    } else {
-      const displayName = u.display || u.username || '';
-      let avatarHtml = '';
-      if (u.avatar){
-        avatarHtml = `<img src="${u.avatar}" class="user-avatar" alt="${displayName} avatar">`;
-      } else {
-        const initials = (displayName.split(' ').map(s=>s[0]).join('') || displayName.slice(0,2)).toUpperCase().slice(0,2);
-        // choose a deterministic hue from the display name
-        const hue = Array.from(displayName).reduce((acc,ch)=>acc + ch.charCodeAt(0), 0) % 360;
-        avatarHtml = `<div class="user-avatar user-avatar-initials" style="background:hsl(${hue} 60% 40%);">${initials}</div>`;
-      }
-      userBtn.innerHTML = `${avatarHtml}<span class="user-name">${displayName}</span>`;
-      userBtn.title = `Signed in as ${u.username}`;
-    }
-    // update playlists for current user
-    renderPlaylists();
-  }
+        /* Play Button specific modern styling */
+        .play-button {
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(30, 215, 96, 0.4);
+        }
+        .play-button:hover {
+            transform: scale(1.08);
+            box-shadow: 0 6px 20px rgba(30, 215, 96, 0.6);
+        }
+        
+    </style>
+</head>
+<body class="text-white">
 
-  // Auth modal helpers
-  const authModal = el('auth-modal');
-  const authClose = el('auth-close');
-  const tabLogin = el('tab-login');
-  const tabSignup = el('tab-signup');
-  const panelLogin = el('auth-login');
-  const panelSignup = el('auth-signup');
+    <!-- Notification Box (Hidden by default) --><div id="notification-box" class="bg-green-600 shadow-lg fixed top-4 right-4 z-50 p-3 rounded-lg opacity-0 transition duration-300 ease-in-out transform -translate-y-4">
+        <p id="notification-message" class="font-semibold"></p>
+    </div>
 
-  function openAuth(){ if (authModal) { authModal.classList.remove('hidden'); authModal.setAttribute('aria-hidden','false'); } }
-  function closeAuth(){ if (authModal) { authModal.classList.add('hidden'); authModal.setAttribute('aria-hidden','true'); } }
+    <div id="app" class="h-screen w-screen flex flex-col gap-0 p-0 overflow-hidden">
+        
+        <!-- Top Section (Sidebar + Main View) --><div class="flex flex-1 overflow-hidden gap-0">
+            
+            <!-- LEFT SIDEBAR --><aside class="sidebar w-72 flex flex-col text-sm border-r border-zinc-900">
+                
+                <!-- Navigation Section (Sharp corners for neo-brutalism touch) --><div class="bg-[var(--bg-dark-sidebar)] p-4 pt-6 space-y-6">
+                    <div class="flex items-center space-x-2 text-xl font-extrabold text-[var(--accent-green)]">
+                        <!-- Music Wave Logo/Icon Placeholder --><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15.5v-11a.5.5 0 01.815-.395l6 5.5a.5.5 0 010 .79l-6 5.5a.5.5 0 01-.815-.395z"/></svg>
+                        <span class="text-white text-2xl">Music Wave</span>
+                    </div>
+                    <ul class="space-y-2">
+                        <!-- Modernized Navigation Links --><li class="group">
+                            <a href="#" class="flex items-center space-x-4 p-2 rounded-lg text-white font-bold bg-zinc-800 transition duration-150">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                <span>Home</span>
+                            </a>
+                        </li>
+                        <li class="group">
+                            <a href="#" class="flex items-center space-x-4 p-2 rounded-lg text-gray-400 hover:text-white transition duration-150">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                <span>Search</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Library Section --><div class="bg-[var(--bg-dark-sidebar)] flex flex-col flex-1 p-4 overflow-y-auto custom-scrollbar">
+                    
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="flex items-center space-x-2 text-gray-400 hover:text-white transition cursor-pointer">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/><path d="M16 11l-4-4-4 4"/><path d="M12 3v8"/></svg>
+                            <span class="font-bold">Your Library</span>
+                        </div>
+                        <div class="flex items-center space-x-2 text-gray-400">
+                            <button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+                            </button>
+                            <button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
 
-  // user button click handled later (toggles menu or opens auth)
-  if (authClose) authClose.addEventListener('click', closeAuth);
-  if (tabLogin) tabLogin.addEventListener('click', ()=>{ tabLogin.classList.add('active'); tabSignup.classList.remove('active'); panelLogin.classList.remove('hidden'); panelSignup.classList.add('hidden'); });
-  if (tabSignup) tabSignup.addEventListener('click', ()=>{ tabSignup.classList.add('active'); tabLogin.classList.remove('active'); panelSignup.classList.remove('hidden'); panelLogin.classList.add('hidden'); });
+                    <!-- Filter/Search Bar --><div class="flex justify-between items-center mb-4">
+                        <div class="flex space-x-2 text-xs font-semibold">
+                            <span class="card-bg px-3 py-1 rounded-full cursor-pointer hover:bg-zinc-700 transition duration-150">Playlists</span>
+                            <span class="card-bg px-3 py-1 rounded-full cursor-pointer hover:bg-zinc-700 transition duration-150">Artists</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Content List (Empty) --><div class="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                        <!-- User requested this list to be empty -->
+                    </div>
+                </div>
+            </aside>
+            
+            <!-- MAIN CONTENT VIEW --><main class="main-content flex-1 overflow-y-auto custom-scrollbar">
+                
+                <!-- Fixed Header/Top Bar with Glassmorphism Effect --><header class="glass-header sticky top-0 z-20 p-4 flex justify-between items-center">
+                    <div class="flex items-center space-x-3">
+                        <!-- Navigation Arrows --><div class="flex space-x-2">
+                            <button class="bg-black/50 p-1 rounded-full text-gray-400 cursor-not-allowed hover:bg-black transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                            </button>
+                            <button class="bg-black/50 p-1 rounded-full text-white hover:bg-black transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Search/Quick Access (Hidden on mobile) --><div class="relative hidden md:block">
+                            <input type="text" placeholder="What do you want to play?" class="bg-zinc-800 text-sm py-2 pl-10 pr-4 rounded-full w-96 focus:outline-none focus:ring-2 focus:ring-[var(--accent-green)] transition">
+                            <svg class="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                        </div>
+                    </div>
 
-  // --- Playlist modal helpers ---
-  const playlistModal = el('playlist-modal');
-  const playlistClose = el('playlist-close');
-  const playlistNameInput = el('playlist-name-input');
-  const playlistCreateBtn = el('playlist-create');
-  const playlistCancelBtn = el('playlist-cancel');
+                    <div class="flex items-center space-x-4 text-sm font-semibold">
+                        <!-- Profile icon (More defined avatar shape) --><div class="w-9 h-9 rounded-full bg-zinc-600 flex items-center justify-center font-bold text-xs cursor-pointer ring-2 ring-transparent hover:ring-[var(--accent-green)] transition duration-200">
+                            P
+                        </div>
+                    </div>
+                </header>
+                
+                <!-- Main Content Area (Scrollable Body) --><div class="p-6">
+                    
+                    <!-- Quick Filters --><div class="flex space-x-3 mb-6">
+                        <span class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer shadow-lg hover:bg-gray-200 transition">All</span>
+                        <span class="card-bg text-white px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer hover:bg-zinc-700 transition">Music</span>
+                        <span class="card-bg text-white px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer hover:bg-zinc-700 transition">Podcasts</span>
+                    </div>
 
-  function openPlaylistModal(){ if (playlistModal) { playlistModal.classList.remove('hidden'); playlistModal.setAttribute('aria-hidden','false'); setTimeout(()=>{ if (playlistNameInput) playlistNameInput.focus(); },50); } }
-  function closePlaylistModal(){ if (playlistModal) { playlistModal.classList.add('hidden'); playlistModal.setAttribute('aria-hidden','true'); } if (playlistNameInput) playlistNameInput.value = ''; }
+                    <!-- Jump Back In Section (Large Cards) --><div class="mb-8">
+                        <h2 class="text-2xl font-bold mb-4">Jump Back In</h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            <!-- Card 1: This is Ogryzek --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/000000/white?text=Artist" onerror="this.src='https://placehold.co/80x80/000000/white?text=Artist';" class="w-20 h-20 object-cover" alt="Artist Image">
+                                <span class="font-bold text-base whitespace-nowrap overflow-hidden text-ellipsis">This is Ogryzek</span>
+                                <!-- Modernized Play Button -->
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Card 2: Liked Songs (ID for JS interaction) --><div id="liked-songs-main-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <div class="w-20 h-20 bg-[var(--accent-purple)] flex items-center justify-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                                </div>
+                                <span class="font-bold text-base">Liked Songs</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
 
-  async function createPlaylistFromModal(){
-    const name = playlistNameInput && playlistNameInput.value && playlistNameInput.value.trim();
-    if (!name) return alert('Please enter a playlist name');
-    const users = loadUsers(); const curUser = localStorage.getItem('mw_current'); if (!curUser) return alert('Sign in first');
-    const found = users[curUser]; if (!found) return;
-    found.playlists = found.playlists || [];
-    const newP = { id: 'pl_'+Date.now(), title: name, tracks: [] };
-    found.playlists.push(newP);
-    saveUsers(users);
-    syncCurrentUserToServer();
-    renderPlaylists();
-    closePlaylistModal();
-  }
+                            <!-- Card 3: ABYSS --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/424242/fff?text=ABYSS" onerror="this.src='https://placehold.co/80x80/424242/fff?text=ABYSS';" class="w-20 h-20 object-cover" alt="Album Cover">
+                                <span class="font-bold text-base">ABYSS</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
 
-  if (playlistClose) playlistClose.addEventListener('click', closePlaylistModal);
-  if (playlistCancelBtn) playlistCancelBtn.addEventListener('click', closePlaylistModal);
-  if (playlistCreateBtn) playlistCreateBtn.addEventListener('click', createPlaylistFromModal);
-  if (playlistNameInput) playlistNameInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') createPlaylistFromModal(); if (e.key === 'Escape') closePlaylistModal(); });
+                            <!-- Card 4: SOMBRA --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/8B0000/fff?text=SOMBRA" onerror="this.src='https://placehold.co/80x80/8B0000/fff?text=SOMBRA';" class="w-20 h-20 object-cover" alt="Album Cover">
+                                <span class="font-bold text-base">SOMBRA</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
 
-  // Login flow
-  if (el('login-btn')) el('login-btn').addEventListener('click', async ()=>{
-    const user = el('login-username').value.trim();
-    const pw = el('login-password').value || '';
-    const err = el('login-error'); err.textContent = '';
-    try{
-      if (!user || !pw) throw new Error('Provide username and password');
-      await loginUser(user,pw);
-      renderUserUI(); closeAuth();
-    }catch(e){ if (err) err.textContent = e.message }
-  });
+                             <!-- Card 5: MAIN CHARACTER --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/2F4F4F/fff?text=MC" onerror="this.src='https://placehold.co/80x80/2F4F4F/fff?text=MC';" class="w-20 h-20 object-cover" alt="Album Cover">
+                                <span class="font-bold text-base">MAIN CHARACTER</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Card 6: SAFADO NO BALÃO --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/696969/fff?text=SBNB" onerror="this.src='https://placehold.co/80x80/696969/fff?text=SBNB';" class="w-20 h-20 object-cover" alt="Album Cover">
+                                <span class="font-bold text-base">SAFADO NO BALÃO</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
 
-  // Signup flow
-  if (el('signup-btn')) el('signup-btn').addEventListener('click', async ()=>{
-    const user = el('signup-username').value.trim();
-    const display = el('signup-display').value.trim();
-    const pw = el('signup-password').value || '';
-    const pw2 = el('signup-password2').value || '';
-    const file = el('signup-avatar').files && el('signup-avatar').files[0];
-    const err = el('signup-error'); err.textContent = '';
-    try{
-      if (!user) throw new Error('Choose a username');
-      if (pw.length < 4) throw new Error('Password must be at least 4 characters');
-      if (pw !== pw2) throw new Error('Passwords do not match');
-      let avatarData = null;
-      if (file) avatarData = await resizeImage(file, 256);
-      await createUser(user,pw,display,avatarData);
-      renderUserUI(); closeAuth();
-      // attempt to sync newly created user to remote (if configured)
-      syncCurrentUserToServer();
-    }catch(e){ if (err) err.textContent = e.message }
-  });
+                            <!-- Card 7: Daily Mix 1 --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/545454/fff?text=DM1" onerror="this.src='https://placehold.co/80x80/545454/fff?text=DM1';" class="w-20 h-20 object-cover" alt="Daily Mix Cover">
+                                <span class="font-bold text-base">Daily Mix 1</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                            
+                            <!-- Card 8: Trending Songs --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                                <img src="https://placehold.co/80x80/1DB954/white?text=TS" onerror="this.src='https://placehold.co/80x80/1DB954/white?text=TS';" class="w-20 h-20 object-cover" alt="Trending Songs Cover">
+                                <span class="font-bold text-base">Trending Songs 2025...</span>
+                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-  // --- User dropdown menu (for signed-in users) ---
-  // create menu element and append to body
-  const userMenu = document.createElement('div');
-  userMenu.id = 'user-menu';
-  userMenu.className = 'user-menu hidden';
-  userMenu.innerHTML = `
-    <button id="menu-profile">Profile</button>
-    <button id="menu-signout">Sign out</button>
-  `;
-  document.body.appendChild(userMenu);
+                    <!-- New Release Section --><h2 class="text-2xl font-bold mb-4">New release from ptasinski</h2>
+                    <div class="mb-8">
+                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
+                            <!-- New Release Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer w-full relative group">
+                                <img src="https://placehold.co/160x160/ffffff/000000?text=NEW+RELEASE" onerror="this.src='https://placehold.co/160x160/ffffff/000000?text=NEW+RELEASE';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Album Art">
+                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-6 top-6">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                </button>
+                                <p class="font-bold truncate text-base">agape pt. 2</p>
+                                <p class="text-sm text-gray-400">Album • ptasinski</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Made For You Section --><div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-bold">Made For Sotam Chompa</h2>
+                        <button class="text-sm text-gray-400 font-semibold hover:text-white transition duration-150">Show all</button>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pb-20">
+                        
+                        <!-- Discover Weekly Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer group relative">
+                            <img src="https://placehold.co/200x200/FF00FF/000000?text=DISCOVER" onerror="this.src='https://placehold.co/200x200/FF00FF/000000?text=DISCOVER';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
+                            <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-6 top-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            </button>
+                            <p class="font-bold text-base truncate">DISCOVER WEEKLY</p>
+                            <p class="text-sm text-gray-400 line-clamp-2">Your shortcut to hidden gems, deep cuts, and...</p>
+                        </div>
+                        
+                        <!-- Daily Mix 02 Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
+                            <img src="https://placehold.co/200x200/696969/fff?text=DM+02" onerror="this.src='https://placehold.co/200x200/696969/fff?text=DM+02';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
+                            <p class="font-bold text-base truncate">Daily Mix 02</p>
+                            <p class="text-sm text-gray-400 line-clamp-2">Ogryzek, DJ FKU, BOWSY and more</p>
+                        </div>
 
-  function showUserMenu(){
-    const ub = el('user-btn'); if (!ub) return;
-    const rect = ub.getBoundingClientRect();
-    userMenu.style.right = (document.documentElement.clientWidth - rect.right + 18) + 'px';
-    userMenu.style.top = (rect.bottom + 8) + 'px';
-    userMenu.classList.remove('hidden');
-  }
-  function hideUserMenu(){ userMenu.classList.add('hidden'); }
+                        <!-- Lady Gaga Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
+                            <img src="https://placehold.co/200x200/6A5ACD/fff?text=LG" onerror="this.src='https://placehold.co/200x200/6A5ACD/fff?text=LG';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
+                            <p class="font-bold text-base truncate">Lady Gaga, Lana Del Rey...</p>
+                            <p class="text-sm text-gray-400 line-clamp-2">Lady Gaga, Lana Del Rey, Doja Cat and more</p>
+                        </div>
 
-  // click behavior: if logged-in toggle menu, otherwise open auth
-  if (el('user-btn')) el('user-btn').addEventListener('click', ()=>{
-    const u = getCurrentUser();
-    if (!u) return openAuth();
-    if (userMenu.classList.contains('hidden')) showUserMenu(); else hideUserMenu();
-  });
+                        <!-- Daily Mix 03 Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
+                            <img src="https://placehold.co/200x200/D2B48C/000?text=DM+03" onerror="this.src='https://placehold.co/200x200/D2B48C/000?text=DM+03';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
+                            <p class="font-bold text-base truncate">Daily Mix 03</p>
+                            <p class="text-sm text-gray-400 line-clamp-2">Taylor, The Weeknd and more</p>
+                        </div>
+                    </div>
+                </div>
 
-  // menu actions
-  document.body.addEventListener('click', (e)=>{
-    const target = e.target;
-    if (target && (target.id === 'menu-signout')){
-      logoutUser(); hideUserMenu();
-      return;
-    }
-    
-    if (target && target.id === 'menu-profile'){
-      hideUserMenu();
-      showProfile();
-      return;
-    }
-    // hide menu when clicking outside
-    const ub = el('user-btn');
-    if (!ub) return;
-    if (userMenu.classList.contains('hidden')) return;
-    if (target === ub || ub.contains(target) || userMenu.contains(target)) return;
-    hideUserMenu();
-  });
+            </main>
+        </div>
+        
+        <!-- BOTTOM PLAYER BAR with Glassmorphism Effect --><footer class="glass-footer h-20 flex justify-between items-center px-4 md:px-6 shadow-2xl sticky bottom-0 z-30">
+            
+            <!-- Left: Now Playing Info --><div class="flex items-center space-x-4 w-1/4">
+                <img src="https://placehold.co/60x60/800080/ffffff?text=NP" onerror="this.src='https://placehold.co/60x60/800080/ffffff?text=NP';" class="w-14 h-14 rounded-md object-cover shadow-lg" alt="Now Playing Art">
+                <div>
+                    <p class="text-sm font-semibold truncate hover:underline cursor-pointer">LIKE ME</p>
+                    <p class="text-xs text-gray-400 truncate hover:text-white cursor-pointer">Ogryzek</p>
+                </div>
+                <!-- Heart Icon Button --><button class="text-gray-500 hover:text-green-500 transition duration-150">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                </button>
+            </div>
+            
+            <!-- Center: Controls and Seek Bar --><div class="flex flex-col items-center justify-center w-1/2 max-w-xl">
+                <!-- Playback Controls --><div class="flex items-center space-x-6 mb-1">
+                    <button title="Shuffle" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20l7-7"/><path d="M21 16l-7 7"/><path d="M5 20h4"/></svg></button>
+                    <button title="Previous" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" x2="5" y1="19" y2="5"/></svg></button>
+                    
+                    <!-- Main Play/Pause Button (White ring effect) --><button title="Play" class="w-10 h-10 rounded-full bg-white flex items-center justify-center text-black ring-2 ring-gray-600 hover:ring-white transition hover:scale-105">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    </button>
+                    
+                    <button title="Next" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" x2="19" y1="5" y2="19"/></svg></button>
+                    <button title="Repeat" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></button>
+                </div>
+                
+                <!-- Seek Bar (Interactive look) --><div class="flex items-center space-x-2 w-full">
+                    <span class="text-xs text-gray-400">1:33</span>
+                    <div class="flex-1 h-1 bg-zinc-700 rounded-full group relative cursor-pointer">
+                        <!-- Progress line --><div class="h-full bg-white rounded-full w-1/3 group-hover:bg-[var(--accent-green)] transition-colors"></div>
+                        <!-- Current position knob (only visible on hover/touch) --><div class="absolute right-[66%] top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
+                    </div>
+                    <span class="text-xs text-gray-400">3:50</span>
+                </div>
+            </div>
+            
+            <!-- Right: Extra Controls (Lyrics, Queue, Volume) --><div class="flex items-center space-x-4 w-1/4 justify-end text-gray-400">
+                <button title="Lyrics" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><path d="M17 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 13a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M21 17a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg></button>
+                <button title="Queue" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></button>
+                
+                <!-- Volume Control --><div class="flex items-center group w-24">
+                    <button title="Volume" class="hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>
+                    <div class="flex-1 h-1 bg-zinc-700 rounded-full group relative mx-2 cursor-pointer">
+                        <!-- Volume level --><div class="h-full bg-white rounded-full w-3/4 group-hover:bg-[var(--accent-green)] transition-colors"></div>
+                        <!-- Volume knob --><div class="absolute right-1/4 top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-md"></div>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
 
-  // render user on load
-  // render user on load
-  renderUserUI();
+    <script>
+        // --- Notification Functionality ---
+        function showNotification(message) {
+            const box = document.getElementById('notification-box');
+            const msg = document.getElementById('notification-message');
+            
+            // Clear any existing timeout
+            clearTimeout(window.notificationTimeout);
+            
+            // Set message and show the box
+            msg.textContent = message;
+            box.classList.add('opacity-100', 'translate-y-0');
+            box.classList.remove('opacity-0', '-translate-y-4');
 
-  // Load remote tracks (if API base configured) then initial render
-  (async ()=>{
-    try{ await fetchRemoteTracks(); }catch(e){}
-    renderGrid(); renderDiscover(); updatePlayerUI(); showView('home');
-  })();
-  </script>
+            // Hide the box after 3 seconds
+            window.notificationTimeout = setTimeout(() => {
+                box.classList.remove('opacity-100', 'translate-y-0');
+                box.classList.add('opacity-0', '-translate-y-4');
+            }, 3000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Placeholder click handlers for demonstration
+            document.querySelectorAll('.play-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent card click
+                    const card = e.currentTarget.closest('.group');
+                    const titleElement = card.querySelector('.font-bold');
+                    const title = titleElement ? titleElement.textContent.trim() : 'Track';
+                    showNotification(`Playing: ${title}`);
+                });
+            });
+
+            document.querySelectorAll('.card-bg').forEach(card => {
+                card.addEventListener('click', (e) => {
+                    // Check if the click target or its parent is the button
+                    if (e.target.closest('.play-button')) return;
+                    
+                    const titleElement = card.querySelector('.font-bold');
+                    const title = titleElement ? titleElement.textContent.trim() : 'Item';
+                    showNotification(`Browsing details for: ${title}`);
+                });
+            });
+
+            // Example of a control button handler
+            document.querySelector('[title="Play"]').addEventListener('click', () => {
+                showNotification("Toggled Play/Pause!");
+            });
+        });
+    </script>
 </body>
 </html>
