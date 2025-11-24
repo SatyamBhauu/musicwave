@@ -14,6 +14,7 @@
             --bg-dark-sidebar: #07070A; /* Deepest black for sidebar */
             --accent-green: #1ED760; /* Slightly brighter, more modern green */
             --accent-purple: #9540FF; /* Vibrant purple */
+            --playlist-ogryzek-gradient: linear-gradient(180deg, #A88647 0%, #302613 100%); /* Gold/Brown Gradient for Ogryzek */
         }
         body {
             background-color: black;
@@ -66,6 +67,21 @@
             box-shadow: 0 6px 20px rgba(30, 215, 96, 0.6);
         }
         
+        /* Playlist specific background style */
+        #ogryzek-playlist-detail {
+            /* Ensures the gradient covers the top half, but the bottom becomes the main dark background */
+            background-color: var(--bg-dark-main); 
+        }
+        .ogryzek-header-gradient {
+             /* Use padding-top to define the gradient area height */
+            background: var(--playlist-ogryzek-gradient);
+            padding-top: 200px; 
+            transition: background 0.3s;
+        }
+        .track-row:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
     </style>
 </head>
 <body class="text-white">
@@ -80,14 +96,14 @@
             
             <!-- LEFT SIDEBAR --><aside class="sidebar w-72 flex flex-col text-sm border-r border-zinc-900">
                 
-                <!-- Navigation Section (Sharp corners for neo-brutalism touch) --><div class="bg-[var(--bg-dark-sidebar)] p-4 pt-6 space-y-6">
+                <!-- Navigation Section --><div class="bg-[var(--bg-dark-sidebar)] p-4 pt-6 space-y-6">
                     <div class="flex items-center space-x-2 text-xl font-extrabold text-[var(--accent-green)]">
                         <!-- Music Wave Logo/Icon Placeholder --><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm-1 15.5v-11a.5.5 0 01.815-.395l6 5.5a.5.5 0 010 .79l-6 5.5a.5.5 0 01-.815-.395z"/></svg>
                         <span class="text-white text-2xl">Music Wave</span>
                     </div>
                     <ul class="space-y-2">
-                        <!-- Modernized Navigation Links --><li class="group">
-                            <a href="#" class="flex items-center space-x-4 p-2 rounded-lg text-white font-bold bg-zinc-800 transition duration-150">
+                        <!-- Navigation Links --><li class="group">
+                            <!-- Click on Home brings back to Home View --><a href="#" id="nav-home" class="flex items-center space-x-4 p-2 rounded-lg text-white font-bold bg-zinc-800 transition duration-150">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                                 <span>Home</span>
                             </a>
@@ -109,11 +125,8 @@
                             <span class="font-bold">Your Library</span>
                         </div>
                         <div class="flex items-center space-x-2 text-gray-400">
-                            <button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
+                            <!-- Only + (Create) button remains --><button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                            </button>
-                            <button class="w-8 h-8 flex items-center justify-center hover:bg-zinc-800 rounded-full hover:text-white transition">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
                             </button>
                         </div>
                     </div>
@@ -131,12 +144,12 @@
                 </div>
             </aside>
             
-            <!-- MAIN CONTENT VIEW --><main class="main-content flex-1 overflow-y-auto custom-scrollbar">
+            <!-- MAIN CONTENT VIEW CONTAINER --><main class="main-content flex-1 overflow-y-auto custom-scrollbar">
                 
                 <!-- Fixed Header/Top Bar with Glassmorphism Effect --><header class="glass-header sticky top-0 z-20 p-4 flex justify-between items-center">
                     <div class="flex items-center space-x-3">
-                        <!-- Navigation Arrows --><div class="flex space-x-2">
-                            <button class="bg-black/50 p-1 rounded-full text-gray-400 cursor-not-allowed hover:bg-black transition">
+                        <!-- Navigation Arrows (Used for history/view switching) --><div class="flex space-x-2">
+                            <button id="back-button" class="bg-black/50 p-1 rounded-full text-gray-400 cursor-not-allowed hover:bg-black transition">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
                             </button>
                             <button class="bg-black/50 p-1 rounded-full text-white hover:bg-black transition">
@@ -151,13 +164,13 @@
                     </div>
 
                     <div class="flex items-center space-x-4 text-sm font-semibold">
-                        <!-- Profile icon (More defined avatar shape) --><div class="w-9 h-9 rounded-full bg-zinc-600 flex items-center justify-center font-bold text-xs cursor-pointer ring-2 ring-transparent hover:ring-[var(--accent-green)] transition duration-200">
+                        <!-- Profile icon --><div class="w-9 h-9 rounded-full bg-zinc-600 flex items-center justify-center font-bold text-xs cursor-pointer ring-2 ring-transparent hover:ring-[var(--accent-green)] transition duration-200">
                             P
                         </div>
                     </div>
                 </header>
                 
-                <!-- Main Content Area (Scrollable Body) --><div class="p-6">
+                <!-- --- VIEW 1: HOME DASHBOARD --- --><div id="home-view" class="p-6">
                     
                     <!-- Quick Filters --><div class="flex space-x-3 mb-6">
                         <span class="bg-white text-black px-4 py-1.5 rounded-full text-sm font-semibold cursor-pointer shadow-lg hover:bg-gray-200 transition">All</span>
@@ -168,7 +181,7 @@
                     <!-- Jump Back In Section (Large Cards) --><div class="mb-8">
                         <h2 class="text-2xl font-bold mb-4">Jump Back In</h2>
                         <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                            <!-- Card 1: This is Ogryzek --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                            <!-- Card 1: This is Ogryzek (Clickable to switch view) --><div id="ogryzek-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
                                 <img src="https://placehold.co/80x80/000000/white?text=Artist" onerror="this.src='https://placehold.co/80x80/000000/white?text=Artist';" class="w-20 h-20 object-cover" alt="Artist Image">
                                 <span class="font-bold text-base whitespace-nowrap overflow-hidden text-ellipsis">This is Ogryzek</span>
                                 <!-- Modernized Play Button -->
@@ -177,7 +190,7 @@
                                 </button>
                             </div>
                             
-                            <!-- Card 2: Liked Songs (ID for JS interaction) --><div id="liked-songs-main-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
+                            <!-- Card 2: Liked Songs --><div id="liked-songs-main-card" class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
                                 <div class="w-20 h-20 bg-[var(--accent-purple)] flex items-center justify-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
                                 </div>
@@ -186,103 +199,97 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                 </button>
                             </div>
-
-                            <!-- Card 3: ABYSS --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/424242/fff?text=ABYSS" onerror="this.src='https://placehold.co/80x80/424242/fff?text=ABYSS';" class="w-20 h-20 object-cover" alt="Album Cover">
-                                <span class="font-bold text-base">ABYSS</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-
-                            <!-- Card 4: SOMBRA --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/8B0000/fff?text=SOMBRA" onerror="this.src='https://placehold.co/80x80/8B0000/fff?text=SOMBRA';" class="w-20 h-20 object-cover" alt="Album Cover">
-                                <span class="font-bold text-base">SOMBRA</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-
-                             <!-- Card 5: MAIN CHARACTER --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/2F4F4F/fff?text=MC" onerror="this.src='https://placehold.co/80x80/2F4F4F/fff?text=MC';" class="w-20 h-20 object-cover" alt="Album Cover">
-                                <span class="font-bold text-base">MAIN CHARACTER</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
                             
-                            <!-- Card 6: SAFADO NO BALÃO --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/696969/fff?text=SBNB" onerror="this.src='https://placehold.co/80x80/696969/fff?text=SBNB';" class="w-20 h-20 object-cover" alt="Album Cover">
-                                <span class="font-bold text-base">SAFADO NO BALÃO</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
+                            <!-- Remaining cards removed in previous step -->
 
-                            <!-- Card 7: Daily Mix 1 --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/545454/fff?text=DM1" onerror="this.src='https://placehold.co/80x80/545454/fff?text=DM1';" class="w-20 h-20 object-cover" alt="Daily Mix Cover">
-                                <span class="font-bold text-base">Daily Mix 1</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
-                            
-                            <!-- Card 8: Trending Songs --><div class="card-bg flex items-center space-x-3 rounded-lg overflow-hidden transition duration-300 hover:bg-zinc-700 cursor-pointer group shadow-lg">
-                                <img src="https://placehold.co/80x80/1DB954/white?text=TS" onerror="this.src='https://placehold.co/80x80/1DB954/white?text=TS';" class="w-20 h-20 object-cover" alt="Trending Songs Cover">
-                                <span class="font-bold text-base">Trending Songs 2025...</span>
-                                <button class="play-button p-4 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-4">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                            </div>
                         </div>
                     </div>
 
-                    <!-- New Release Section --><h2 class="text-2xl font-bold mb-4">New release from ptasinski</h2>
-                    <div class="mb-8">
-                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
-                            <!-- New Release Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer w-full relative group">
-                                <img src="https://placehold.co/160x160/ffffff/000000?text=NEW+RELEASE" onerror="this.src='https://placehold.co/160x160/ffffff/000000?text=NEW+RELEASE';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Album Art">
-                                <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-6 top-6">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                </button>
-                                <p class="font-bold truncate text-base">agape pt. 2</p>
-                                <p class="text-sm text-gray-400">Album • ptasinski</p>
+                    <!-- Made For You Section REMOVED -->
+                    <!-- The section "Made For Sotam Chompa" has been removed as requested -->
+                </div>
+
+                <!-- --- VIEW 2: PLAYLIST DETAIL (OGRYZEK) --- --><div id="playlist-detail-view" class="hidden">
+                    <!-- Playlist Detail Header with Gradient BG (Sticky to get effect) --><div id="ogryzek-playlist-detail" class="ogryzek-header-gradient px-6 pt-20 pb-8 sticky top-0 z-10">
+                        <div class="flex items-end space-x-6">
+                            <!-- Album Art --><img src="https://placehold.co/250x250/F2D396/111?text=THIS+IS+OGRYZEK" onerror="this.src='https://placehold.co/250x250/F2D396/111?text=THIS+IS+OGRYZEK';" class="w-64 h-64 shadow-2xl rounded-md" alt="Ogryzek Playlist Cover">
+                            <!-- Details --><div class="flex flex-col">
+                                <p class="text-xs font-semibold text-white/90 uppercase">Public Playlist</p>
+                                <h1 class="text-7xl font-extrabold my-2">This Is Ogryzek</h1>
+                                <p class="text-sm text-white/70">This is Ogryzek. The essential tracks, all in one playlist.</p>
+                                <p class="text-xs text-white/50 mt-2">
+                                    <span class="text-white font-semibold">Spotify</span> • 9,820 saves • 50 songs, about 1 hr 30 min
+                                </p>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Made For You Section --><div class="flex justify-between items-center mb-4">
-                        <h2 class="text-2xl font-bold">Made For Sotam Chompa</h2>
-                        <button class="text-sm text-gray-400 font-semibold hover:text-white transition duration-150">Show all</button>
-                    </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pb-20">
-                        
-                        <!-- Discover Weekly Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer group relative">
-                            <img src="https://placehold.co/200x200/FF00FF/000000?text=DISCOVER" onerror="this.src='https://placehold.co/200x200/FF00FF/000000?text=DISCOVER';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
-                            <button class="play-button p-3 rounded-full bg-[var(--accent-green)] shadow-xl opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 absolute right-6 top-6">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <!-- Playlist Controls and Track List --><div class="p-6 bg-[var(--bg-dark-main)]">
+                        <!-- Controls Row --><div class="flex items-center space-x-6 mb-8">
+                            <!-- Green Play Button --><button class="play-button w-14 h-14 rounded-full bg-[var(--accent-green)] flex items-center justify-center shadow-lg hover:scale-105 transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="black" stroke="black" stroke-width="0" stroke-linecap="round" stroke-linejoin="round" class="ml-0.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                             </button>
-                            <p class="font-bold text-base truncate">DISCOVER WEEKLY</p>
-                            <p class="text-sm text-gray-400 line-clamp-2">Your shortcut to hidden gems, deep cuts, and...</p>
+                            <!-- Secondary Icons --><button title="Shuffle" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M4 20l7-7"/><path d="M21 16l-7 7"/><path d="M5 20h4"/></svg></button>
+                            <button title="Add to Library" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+                            <button title="More" class="text-gray-400 hover:text-white transition"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
                         </div>
                         
-                        <!-- Daily Mix 02 Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
-                            <img src="https://placehold.co/200x200/696969/fff?text=DM+02" onerror="this.src='https://placehold.co/200x200/696969/fff?text=DM+02';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
-                            <p class="font-bold text-base truncate">Daily Mix 02</p>
-                            <p class="text-sm text-gray-400 line-clamp-2">Ogryzek, DJ FKU, BOWSY and more</p>
-                        </div>
-
-                        <!-- Lady Gaga Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
-                            <img src="https://placehold.co/200x200/6A5ACD/fff?text=LG" onerror="this.src='https://placehold.co/200x200/6A5ACD/fff?text=LG';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
-                            <p class="font-bold text-base truncate">Lady Gaga, Lana Del Rey...</p>
-                            <p class="text-sm text-gray-400 line-clamp-2">Lady Gaga, Lana Del Rey, Doja Cat and more</p>
-                        </div>
-
-                        <!-- Daily Mix 03 Card --><div class="card-bg p-4 rounded-xl space-y-3 hover:bg-zinc-800 transition duration-300 cursor-pointer">
-                            <img src="https://placehold.co/200x200/D2B48C/000?text=DM+03" onerror="this.src='https://placehold.co/200x200/D2B48C/000?text=DM+03';" class="rounded-xl shadow-xl w-full aspect-square object-cover" alt="Playlist Cover">
-                            <p class="font-bold text-base truncate">Daily Mix 03</p>
-                            <p class="text-sm text-gray-400 line-clamp-2">Taylor, The Weeknd and more</p>
-                        </div>
+                        <!-- Track List Table --><table class="w-full text-left table-auto">
+                            <thead>
+                                <tr class="text-gray-400 border-b border-zinc-700 uppercase text-xs tracking-wider">
+                                    <th class="py-2 w-10">#</th>
+                                    <th class="py-2">Title</th>
+                                    <th class="py-2 hidden sm:table-cell">Album</th>
+                                    <th class="py-2 hidden md:table-cell w-28">Date added</th>
+                                    <th class="py-2 w-16"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v5l3 3"/></svg></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Track 1: MAIN CHARACTER --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
+                                    <td class="py-3 w-10">1</td>
+                                    <td class="py-3 flex items-center space-x-3">
+                                        <img src="https://placehold.co/40x40/2F4F4F/fff?text=MC" onerror="this.src='https://placehold.co/40x40/2F4F4F/fff?text=MC';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
+                                        <div>
+                                            <p class="font-semibold text-white">MAIN CHARACTER</p>
+                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
+                                        </div>
+                                    </td>
+                                    <td class="py-3 hidden sm:table-cell">MAIN CHARACTER</td>
+                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">A few days ago</td>
+                                    <td class="py-3 text-gray-400">1:38</td>
+                                </tr>
+                                <!-- Track 2: GLORY --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
+                                    <td class="py-3 w-10">2</td>
+                                    <td class="py-3 flex items-center space-x-3">
+                                        <img src="https://placehold.co/40x40/B22222/fff?text=GLORY" onerror="this.src='https://placehold.co/40x40/B22222/fff?text=GLORY';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
+                                        <div>
+                                            <p class="font-semibold text-white">GLORY</p>
+                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
+                                        </div>
+                                    </td>
+                                    <td class="py-3 hidden sm:table-cell">GLORY</td>
+                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">2 weeks ago</td>
+                                    <td class="py-3 text-gray-400">2:29</td>
+                                </tr>
+                                <!-- Track 3: AURA --><tr class="track-row text-sm text-white/90 cursor-pointer rounded-lg transition duration-150">
+                                    <td class="py-3 w-10">3</td>
+                                    <td class="py-3 flex items-center space-x-3">
+                                        <img src="https://placehold.co/40x40/1E90FF/fff?text=AURA" onerror="this.src='https://placehold.co/40x40/1E90FF/fff?text=AURA';" class="w-10 h-10 rounded-md object-cover hidden sm:block" alt="Album Art">
+                                        <div>
+                                            <p class="font-semibold text-white">AURA</p>
+                                            <p class="text-xs text-gray-400 hover:text-white hover:underline">Ogryzek</p>
+                                        </div>
+                                    </td>
+                                    <td class="py-3 hidden sm:table-cell">AURA</td>
+                                    <td class="py-3 hidden md:table-cell text-gray-400 text-xs">1 month ago</td>
+                                    <td class="py-3 text-gray-400">1:55</td>
+                                </tr>
+                                <!-- More Tracks Placeholder -->
+                                <tr class="text-gray-400 text-sm"><td colspan="5" class="pt-8 pb-4">
+                                    <p>... and 47 more essential tracks by Ogryzek. </p>
+                                </td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
@@ -341,6 +348,42 @@
     </div>
 
     <script>
+        // --- View Management ---
+        const views = {
+            home: document.getElementById('home-view'),
+            playlistDetail: document.getElementById('playlist-detail-view')
+        };
+        const mainContent = document.querySelector('.main-content');
+        const backButton = document.getElementById('back-button');
+
+        /**
+         * Switches the main content view.
+         * @param {string} viewName - The name of the view to show ('home' or 'playlistDetail').
+         */
+        function switchView(viewName) {
+            // Hide all views
+            Object.values(views).forEach(view => {
+                view.classList.add('hidden');
+            });
+
+            // Show the target view
+            if (views[viewName]) {
+                views[viewName].classList.remove('hidden');
+                mainContent.scrollTop = 0; // Scroll to top on view change
+                
+                // Update back button state
+                if (viewName === 'playlistDetail') {
+                    backButton.classList.remove('cursor-not-allowed', 'text-gray-400');
+                    backButton.classList.add('cursor-pointer', 'text-white');
+                    backButton.onclick = () => switchView('home');
+                } else { // 'home' view
+                    backButton.classList.add('cursor-not-allowed', 'text-gray-400');
+                    backButton.classList.remove('cursor-pointer', 'text-white');
+                    backButton.onclick = null;
+                }
+            }
+        }
+        
         // --- Notification Functionality ---
         function showNotification(message) {
             const box = document.getElementById('notification-box');
@@ -362,12 +405,32 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            // Placeholder click handlers for demonstration
+            // 1. Initial setup: Ensure we start on the home view
+            switchView('home');
+            
+            // 2. Set up navigation clicks
+            document.getElementById('nav-home').addEventListener('click', (e) => {
+                e.preventDefault();
+                switchView('home');
+            });
+            
+            // 3. Handle the 'This is Ogryzek' card click to switch to the detail view
+            const ogryzekCard = document.getElementById('ogryzek-card');
+            if (ogryzekCard) {
+                ogryzekCard.addEventListener('click', (e) => {
+                    // Prevent navigation if the play button was clicked directly
+                    if (e.target.closest('.play-button')) return;
+                    switchView('playlistDetail');
+                });
+            }
+
+
+            // Placeholder click handlers for general elements
             document.querySelectorAll('.play-button').forEach(button => {
                 button.addEventListener('click', (e) => {
                     e.stopPropagation(); // Prevent card click
-                    const card = e.currentTarget.closest('.group');
-                    const titleElement = card.querySelector('.font-bold');
+                    const parent = e.currentTarget.closest('.group') || e.currentTarget.closest('.flex-col');
+                    const titleElement = parent ? parent.querySelector('.font-bold') : null;
                     const title = titleElement ? titleElement.textContent.trim() : 'Track';
                     showNotification(`Playing: ${title}`);
                 });
@@ -375,8 +438,8 @@
 
             document.querySelectorAll('.card-bg').forEach(card => {
                 card.addEventListener('click', (e) => {
-                    // Check if the click target or its parent is the button
-                    if (e.target.closest('.play-button')) return;
+                    // Prevent navigation if the play button was clicked directly
+                    if (e.target.closest('.play-button') || e.currentTarget.id === 'ogryzek-card' || e.currentTarget.id === 'liked-songs-main-card') return;
                     
                     const titleElement = card.querySelector('.font-bold');
                     const title = titleElement ? titleElement.textContent.trim() : 'Item';
@@ -388,6 +451,20 @@
             document.querySelector('[title="Play"]').addEventListener('click', () => {
                 showNotification("Toggled Play/Pause!");
             });
+            
+            // Track row click handler (Play Track)
+            document.querySelectorAll('.track-row').forEach(row => {
+                row.addEventListener('click', (e) => {
+                    const title = row.querySelector('.font-semibold').textContent;
+                    showNotification(`Playing track: ${title}`);
+                });
+            });
+            
+            // Handle Liked Songs card click
+            document.getElementById('liked-songs-main-card').addEventListener('click', () => {
+                showNotification("You navigated to Liked Songs (Placeholder)");
+            });
+
         });
     </script>
 </body>
