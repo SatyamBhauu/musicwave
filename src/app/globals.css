@@ -1,0 +1,131 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+:root {
+  --bg-main: #121212;
+  --bg-sidebar: #050505;
+  --bg-card: #181818;
+  --bg-card-hover: #282828;
+  --bg-player: #181818;
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --accent: #00e5ff;
+  --accent-hover: #00b8cc;
+  --border-color: #282828;
+  --font-main: 'Outfit', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  overflow: hidden;
+  /* App-like feel */
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #888;
+}
+
+/* Utilities */
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+.btn-primary {
+  background-color: var(--accent);
+  color: #000;
+  font-weight: 700;
+  padding: 12px 24px;
+  border-radius: 30px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s, background-color 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-hover);
+  transform: scale(1.05);
+}
+
+.card {
+  background-color: var(--bg-card);
+  padding: 16px;
+  border-radius: 8px;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.card:hover {
+  background-color: var(--bg-card-hover);
+}
+
+/* Layout Grid */
+.app-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  grid-template-rows: 1fr 90px;
+  height: 100vh;
+  width: 100vw;
+}
+
+.sidebar {
+  grid-row: 1 / 2;
+  background-color: var(--bg-sidebar);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-right: 1px solid var(--border-color);
+}
+
+.main-content {
+  grid-row: 1 / 2;
+  overflow-y: auto;
+  padding: 24px;
+  background: linear-gradient(180deg, #1e1e2f 0%, var(--bg-main) 40%);
+}
+
+.player-bar {
+  grid-column: 1 / 3;
+  grid-row: 2 / 3;
+  background-color: var(--bg-player);
+  border-top: 1px solid var(--border-color);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 100;
+}
